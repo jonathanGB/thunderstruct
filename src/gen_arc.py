@@ -4,7 +4,7 @@ from functools import reduce
 from scipy.ndimage import binary_dilation
 from scipy.sparse import linalg
 from sksparse.cholmod import cholesky
-
+from time import time
 
 # Generate single leader with boundary b
 def gen_arc(b, leader=None, eta=2, also=False, max_n=1000, h=1, mg=False, method='ipcg', mg_args={}):
@@ -260,10 +260,14 @@ def pcg(x, b, A, get_z, min_err=1e-7):
     r = b - A.dot(x)
     z = get_z(r)
     p = z
+    multTime = time()
     zr = z.T @ r
+    pcg.totalTime += time() - multTime
     while True:
         Ap = A.dot(p)
+        loopMultTime = time()
         pAp = p.T @ Ap
+        pcg.totalTime += time() - loopMultTime
         if pAp == 0:
             raise Exception('Division by 0 in CG')
         alp = zr / pAp
@@ -274,10 +278,14 @@ def pcg(x, b, A, get_z, min_err=1e-7):
         z = get_z(r)
         if zr == 0:
             raise Exception('Division by 0 in CG')
+        loopMultTime = time()
         beta = z.T @ r / zr
+        pcg.totalTime += time() - loopMultTime
         p = z + beta * p
         zr *= beta
+    #print(pcg.totalTime)
     return x
+pcg.totalTime = 0
 
 # Returns function to solve Mz = r in pcg with incomplete poisson preconditioning
 def IP_precond(A):
