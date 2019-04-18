@@ -7,4 +7,4 @@ def movie(vol, iskwargs={}, interval=10, repeat_delay=1000, **kwargs):
     fig = plt.figure()
     plts = [[plt.imshow(A, **iskwargs)] for A in vol]
     ani = animation.ArtistAnimation(fig, plts, interval=interval, blit=True, repeat_delay=repeat_delay, **kwargs)
-    ani.save("light.mp4")
+    ani.save("out.mp4")
