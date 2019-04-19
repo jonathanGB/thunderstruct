@@ -4,6 +4,25 @@ from functools import reduce
 from scipy.ndimage import binary_dilation
 from scipy.sparse import linalg
 from sksparse.cholmod import cholesky
+from time import time
+
+def datdot(A, B):
+    now = time()
+    datdot.shape.add((A.shape, B.shape))
+    res = A.dot(B)
+    total = time() - now
+    if len(B.shape) == 1:
+        datdot.veccount += 1
+        datdot.vectime += total
+    else:
+        datdot.matcount += 1
+        datdot.mattime += total
+    return res
+datdot.mattime = 0
+datdot.matcount = 0
+datdot.vectime = 0
+datdot.veccount = 0
+datdot.shape = set()
 
 
 # Generate single leader with boundary b
@@ -79,13 +98,13 @@ def get_mg_arrays(bound_shape, levels=3, v_up=2, v_down=0, scale=4, method='ipcg
         sol = np.where(np.isnan(bounds[l].flatten()), sol, bounds[l].flatten())
         
         # Restrict solution to coarser level
-        r = Rs[l].dot(f - As[l].dot(sol))
+        r = datdot(Rs[l], f - datdot(As[l], sol))
         
         # solve on coarser level
         sols = solve_level(l + 1, r, us, bounds)
         
         # Interpolate coarse solution to current level and normalize
-        sol += Ts[l].dot(sols[0])
+        sol += datdot(Ts[l], sols[0])
         sol /= np.max(sol)
         
         # Smooth v_up times with new solution
@@ -119,12 +138,12 @@ def multigrid(bound, f, u, mg_arrays=None, n=3, **kwargs):
     for i in range(1, levels):
         Ri = Rs[i - 1]
         xi = bounds[-1].flatten()
-        boundi = np.where(Ri.dot(np.isnan(xi)) != 1, Ri.dot(np.nan_to_num(xi)), np.nan)
+        boundi = np.where(datdot(Ri, np.isnan(xi)) != 1, datdot(Ri, np.nan_to_num(xi)), np.nan)
         bounds.append(boundi.reshape(shapes[i]))
     
     Us = [u]
     for i in range(1, levels):
-        Us.append(Rs[i - 1].dot(Us[-1]) if Us[-1] is not None else None)
+        Us.append(datdot(Rs[i - 1], Us[-1]) if Us[-1] is not None else None)
         
     # Use recursive solve_level function as above for n v-cycles
     for i in range(n):
@@ -139,7 +158,7 @@ def solve_lapl(bound, f, L, x0=None, solve_knowns=True, method='iccg'):
     f = f.copy()
     bound_flat = bound.flatten()
     bn = np.nan_to_num(bound_flat)
-    f += L.dot(bn) # Add in influence of known values of L @ x to f
+    f += datdot(L, bn) # Add in influence of known values of L @ x to f
     
     unknown = np.isnan(bound_flat).astype(int)
     known_idx = np.where(1 - unknown)
@@ -149,7 +168,7 @@ def solve_lapl(bound, f, L, x0=None, solve_knowns=True, method='iccg'):
     # if solve_knowns, keep equations for known variables in system
     if solve_knowns:
         keep_rows = sparse.diags(unknown)
-        L = keep_rows.dot(L).dot(keep_rows) - sparse.diags(1 - unknown)
+        L = datdot(datdot(keep_rows, L), keep_rows) - sparse.diags(1 - unknown)
         solve_idx = np.indices(bound_flat.shape)
     
     i = solve_idx[0]
@@ -197,15 +216,15 @@ def gauss_siedel(bound, u, A, f=None, n=500, use_red_black=True):
         # alternate red-black for update n times
         for _ in range(n):
             for j in red:
-                u[j] += (f[j] - A[j].dot(u)) / A[j, j]
+                u[j] += (f[j] - datdot(A[j], u)) / A[j, j]
             for j in black:
-                u[j] += (f[j] - A[j].dot(u)) / A[j, j]
+                u[j] += (f[j] - datdot(A[j], u)) / A[j, j]
     else:
         # Only compute update at nonboundary
         nnz = np.nonzero(np.isnan(bf))[0]
         for _ in range(n):
             for j in nnz:
-                u[j] += (f[j] - A[j].dot(u)) / A[j, j]
+                u[j] += (f[j] - datdot(A[j], u)) / A[j, j]
     
     # ensure boundary values still hold and reshape
     return np.where(np.isnan(bound), u.reshape(bound.shape), bound)
@@ -222,7 +241,7 @@ def solve_poisson(L, f, x0=None, method='iccg'):
         except Exception:
             # Use LU if not SPD
             return linalg.splu(L, options={'ColPerm': 'NATURAL'}).solve(f)
-    return linalg.inv(L).dot(f)
+    return datdot(linalg.inv(L), f)
 
 # Create interpolation operator along one axis of a grid
 def interp1D(N, M):
@@ -251,41 +270,66 @@ def IC_precond(A):
     # Invert permutation
     Pt = [i for i, j in sorted(enumerate(P), key=lambda j: j[1])]
     def get_z(r):
-        PLz = Dinv.dot(linalg.spsolve_triangular(L, r[P]))
+        PLz = datdot(Dinv, linalg.spsolve_triangular(L, r[P]))
         return linalg.spsolve_triangular(U, PLz, lower=False)[Pt]
     return get_z
 
 # Preconditioned conjugate gradient method given a preconditioning solve get_z
 def pcg(x, b, A, get_z, min_err=1e-7):
-    r = b - A.dot(x)
+    now = time()
+    r = b - datdot(A, x)
+    pcg.dot += time() - now
+    pcg.dotShape.add((A.shape, x.shape))
+    now = time()
     z = get_z(r)
+    pcg.get_z += time() - now
     p = z
+    now = time()
     zr = z.T @ r
+    pcg.at += time() - now
+
     while True:
-        Ap = A.dot(p)
+        if np.abs(zr) < min_err:
+            break
+        if zr == 0:
+            raise Exception('Division by 0 in CG')
+
+        now = time()
+        Ap = datdot(A, p)
+        pcg.dot += time() - now
+        pcg.dotShape.add((A.shape, p.shape))
+        now = time()
         pAp = p.T @ Ap
+        pcg.at += time() - now
         if pAp == 0:
             raise Exception('Division by 0 in CG')
         alp = zr / pAp
         x += alp * p
         r -= alp * Ap
-        if np.abs(zr) < min_err:
-            break
+
+        now = time()
         z = get_z(r)
-        if zr == 0:
-            raise Exception('Division by 0 in CG')
+        pcg.get_z += time() - now
+        now = time()
         beta = z.T @ r / zr
+        pcg.at += time() - now
         p = z + beta * p
         zr *= beta
+
     return x
+
+pcg.at = 0
+pcg.dot = 0
+pcg.get_z = 0
+pcg.dotShape = set()
 
 # Returns function to solve Mz = r in pcg with incomplete poisson preconditioning
 def IP_precond(A):
     L = sparse.tril(A)
     D = sparse.diags(1 / A.diagonal())
-    K = sparse.eye(A.shape[0]) - L.dot(D)
-    Minv = K.dot(K.T)
-    return lambda r: Minv.dot(r)
+    K = sparse.eye(A.shape[0]) - datdot(L, D)
+    Minv = datdot(K, K.T)
+    return lambda r: datdot(Minv, r)
 
 # Factor A for L, U, P, D for incomplete Cholesky, PAP.T = LDU (approx)
 def IC_factor(A, Acp, spilu=False, **kwargs):
