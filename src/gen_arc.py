@@ -5,24 +5,28 @@ from scipy.ndimage import binary_dilation
 from scipy.sparse import linalg
 from sksparse.cholmod import cholesky
 from time import time
+from go_parallelizer import GoParallelizer
 
+gp = GoParallelizer()
 def datdot(A, B):
     now = time()
-    datdot.shape.add((A.shape, B.shape))
-    res = A.dot(B)
-    total = time() - now
+
     if len(B.shape) == 1:
         datdot.veccount += 1
-        datdot.vectime += total
+        res = gp.dot(A, B)
+        datdot.vectime += time() - now
+        return res
     else:
         datdot.matcount += 1
-        datdot.mattime += total
+        res = A.dot(B)
+        datdot.mattime += time() - now
+        return A.dot(B)
     return res
+
 datdot.mattime = 0
 datdot.matcount = 0
 datdot.vectime = 0
 datdot.veccount = 0
-datdot.shape = set()
 
 
 # Generate single leader with boundary b
