@@ -4,6 +4,7 @@ import "C"
 
 import (
 	"reflect"
+	"runtime"
 	"sync"
 	"unsafe"
 )
@@ -92,30 +93,39 @@ func Dot(indptr *C.short, len_indptr C.int, indices *C.short, len_indices C.int,
 	sliceVec := *(*[]float64)(unsafe.Pointer(&headerVec))
 
 	result := make([]float64, len_vec, len_vec)
-	j := 0
+	procs := runtime.NumCPU()
+	blockSize := len(sliceVec) / procs
 	var wg sync.WaitGroup
-	for i := 0; i < len(sliceVec); i++ {
-		if sliceIndptr[i] == sliceIndptr[i+1] {
-			continue
+	wg.Add(procs)
+
+	for proc := 0; proc < procs; proc++ {
+		firstRow := proc * blockSize
+		endRow := (proc + 1) * blockSize
+		if proc == procs-1 {
+			endRow = len(sliceVec)
 		}
 
-		row := sliceData[sliceIndptr[i]:sliceIndptr[i+1]]
-		wg.Add(1)
+		go func(firstRow, endRow int) {
+			j := sliceIndptr[firstRow]
+			for i := firstRow; i < endRow; i++ {
+				if sliceIndptr[i] == sliceIndptr[i+1] {
+					continue
+				}
 
-		go func(row []float64, i, j int) {
-			sum := 0.0
-			for _, val := range row {
-				col := sliceIndices[j]
+				row := sliceData[sliceIndptr[i]:sliceIndptr[i+1]]
+				sum := 0.0
+				for _, val := range row {
+					col := sliceIndices[j]
 
-				sum += val * sliceVec[col]
-				j++
+					sum += val * sliceVec[col]
+					j++
+				}
+
+				result[i] = sum
 			}
 
-			result[i] = sum
 			wg.Done()
-		}(row, i, j)
-
-		j += len(row)
+		}(firstRow, endRow)
 	}
 
 	wg.Wait()
