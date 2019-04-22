@@ -13,8 +13,13 @@ def datdot(A, B):
 
     if len(B.shape) == 1:
         datdot.veccount += 1
+        now1 = time()
+        res = A.dot(B)
+        datdot.restimes.append(time() - now1)
+        now1 = time()
         res = gp.dot(A, B)
-        datdot.vectime += time() - now
+        datdot.res2times.append(time() - now1)
+        datdot.vectime += time() - now1
         return res
     else:
         datdot.matcount += 1
@@ -27,6 +32,8 @@ datdot.mattime = 0
 datdot.matcount = 0
 datdot.vectime = 0
 datdot.veccount = 0
+datdot.restimes = []
+datdot.res2times = []
 
 
 # Generate single leader with boundary b
