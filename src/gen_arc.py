@@ -35,6 +35,30 @@ datdot.veccount = 0
 datdot.restimes = []
 datdot.res2times = []
 
+#replace all @ with this function
+def matmul(A, B):
+    now = time()
+
+    if A.shape[1] != B.shape[0]:
+    	raise Exception('Invalid dim in matrix multiplication')
+
+    else:
+        matmul.matcount += 1
+        now1 = time()
+        res = np.matmul(A,B) #compares previous to not
+        matmul.restimes.append(time() - now1)
+        now1 = time()
+        res = gp.matmul(A, B)
+        matmul.res2times.append(time() - now1)
+        matmul.mattime += time() - now1
+        return res
+   
+
+matmul.mattime = 0
+matmul.matcount = 0 
+matmul.restimes = []
+matmul.res2times = []
+
 
 # Generate single leader with boundary b
 def gen_arc(b, leader=None, eta=2, also=False, max_n=1000, h=1, mg=False, method='ipcg', mg_args={}):
