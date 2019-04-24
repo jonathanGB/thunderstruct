@@ -63,36 +63,13 @@ func DotSerial(indptr *C.short, len_indptr C.int, indices *C.short, len_indices 
 }
 
 //export Dot
-func Dot(indptr *C.uint, len_indptr C.uint, indices *C.uint, len_indices C.uint, data *C.double, len_data C.uint, vec *C.double, len_vec C.uint) uintptr {
-	headerIndptr := reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(indptr)),
-		Len:  int(len_indptr),
-		Cap:  int(len_indptr),
-	}
-	sliceIndptr := *(*[]uint32)(unsafe.Pointer(&headerIndptr))
+func Dot(indptr *C.int, len_indptr C.int, indices *C.int, len_indices C.int, data *C.double, len_data C.int, vec *C.double, len_vec C.int) uintptr {
+	sliceIndptr := (*[1 << 30]C.int)(unsafe.Pointer(indptr))[:len_indptr:len_indptr]
+	sliceIndices := (*[1 << 30]C.int)(unsafe.Pointer(indices))[:len_indices:len_indices]
+	sliceData := (*[1 << 30]C.double)(unsafe.Pointer(data))[:len_data:len_data]
+	sliceVec := (*[1 << 30]C.double)(unsafe.Pointer(vec))[:len_vec:len_vec]
 
-	headerIndices := reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(indices)),
-		Len:  int(len_indices),
-		Cap:  int(len_indices),
-	}
-	sliceIndices := *(*[]uint32)(unsafe.Pointer(&headerIndices))
-
-	headerData := reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(data)),
-		Len:  int(len_data),
-		Cap:  int(len_data),
-	}
-	sliceData := *(*[]float64)(unsafe.Pointer(&headerData))
-
-	headerVec := reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(vec)),
-		Len:  int(len_vec),
-		Cap:  int(len_vec),
-	}
-	sliceVec := *(*[]float64)(unsafe.Pointer(&headerVec))
-
-	result := make([]float64, len_vec, len_vec)
+	result := make([]C.double, len_vec, len_vec)
 	procs := runtime.NumCPU()
 	blockSize := len(sliceVec) / procs
 	var wg sync.WaitGroup
@@ -113,7 +90,7 @@ func Dot(indptr *C.uint, len_indptr C.uint, indices *C.uint, len_indices C.uint,
 				}
 
 				row := sliceData[sliceIndptr[i]:sliceIndptr[i+1]]
-				sum := 0.0
+				var sum C.double = 0.0
 				for _, val := range row {
 					col := sliceIndices[j]
 
