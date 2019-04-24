@@ -1,6 +1,7 @@
 import ctypes
 import numpy as np
 import numpy.ctypeslib as npct
+from sys import stderr
 
 class GoParallelizer:
   def __init__(self):
@@ -15,6 +16,7 @@ class GoParallelizer:
     ]
 
   def dot(self, A, B):
+    #print("{} {}".format(min(A.data), max(A.data)), file=stderr)
     self.lib.Dot.restype = npct.ndpointer(dtype=ctypes.c_double, shape=B.shape)
     return self.lib.Dot(A.indptr, len(A.indptr), A.indices, len(A.indices), A.data, len(A.data), B, len(B))
 

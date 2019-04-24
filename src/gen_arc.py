@@ -13,13 +13,23 @@ def datdot(A, B):
 
     if len(B.shape) == 1:
         datdot.veccount += 1
-        now1 = time()
-        res = A.dot(B)
-        datdot.restimes.append(time() - now1)
-        now1 = time()
+        #now1 = time()
+        #res2 = A.dot(B)
+        #datdot.restimes.append(time() - now1)
+        #now1 = time()
         res = gp.dot(A, B)
-        datdot.res2times.append(time() - now1)
-        datdot.vectime += time() - now1
+        #datdot.res2times.append(time() - now1)
+        datdot.vectime += time() - now
+        #if not np.array_equal(res, res):
+        #    print("errrrrr: gp vs np")
+        #    print(res)
+        #    print(res2)
+        #    print("\n\n")
+        if datdot.veccount % 500 == 0:
+        #    print("Mean of dot prod for numpy: %fμs" % (np.array(datdot.restimes).mean()*1000000))
+        #    print("Mean of dot prod for go-parallel: %fμs" % (np.array(datdot.res2times).mean()*1000000))#datdot.vectime/datdot.veccount)
+        #    print()
+            print("Mean of dot prod for go-parallel: %fμs" % (datdot.vectime/datdot.veccount*1000000))
         return res
     else:
         datdot.matcount += 1
@@ -303,7 +313,9 @@ def pcg(x, b, A, get_z, min_err=1e-7):
         if np.abs(zr) < min_err:
             break
         if zr == 0:
-            raise Exception('Division by 0 in CG')
+            zr = 1e-20
+            print("changed zr")
+            #raise Exception('Division by 0 in CG')
 
         now = time()
         Ap = datdot(A, p)
@@ -313,7 +325,10 @@ def pcg(x, b, A, get_z, min_err=1e-7):
         pAp = p.T @ Ap
         pcg.at += time() - now
         if pAp == 0:
-            raise Exception('Division by 0 in CG')
+            pAp = 1e-20
+            print("changed pAp")
+            #raise Exception('Division by 0 in CG')
+        
         alp = zr / pAp
         x += alp * p
         r -= alp * Ap
