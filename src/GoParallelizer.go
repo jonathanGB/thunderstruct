@@ -63,20 +63,20 @@ func DotSerial(indptr *C.short, len_indptr C.int, indices *C.short, len_indices 
 }
 
 //export Dot
-func Dot(indptr *C.short, len_indptr C.int, indices *C.short, len_indices C.int, data *C.float, len_data C.int, vec *C.float, len_vec C.int) uintptr {
+func Dot(indptr *C.uint, len_indptr C.uint, indices *C.uint, len_indices C.uint, data *C.double, len_data C.uint, vec *C.double, len_vec C.uint) uintptr {
 	headerIndptr := reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(indptr)),
 		Len:  int(len_indptr),
 		Cap:  int(len_indptr),
 	}
-	sliceIndptr := *(*[]int32)(unsafe.Pointer(&headerIndptr))
+	sliceIndptr := *(*[]uint32)(unsafe.Pointer(&headerIndptr))
 
 	headerIndices := reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(indices)),
 		Len:  int(len_indices),
 		Cap:  int(len_indices),
 	}
-	sliceIndices := *(*[]int32)(unsafe.Pointer(&headerIndices))
+	sliceIndices := *(*[]uint32)(unsafe.Pointer(&headerIndices))
 
 	headerData := reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(data)),
