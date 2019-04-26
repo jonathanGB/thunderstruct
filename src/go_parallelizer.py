@@ -15,6 +15,20 @@ class GoParallelizer:
       self.array_1d_float, ctypes.c_int,
       self.array_1d_float
     ]
+    self.lib.Add.argtypes = [
+      self.array_1d_float,
+      self.array_1d_float,
+      ctypes.c_double,
+      self.array_1d_float,
+      ctypes.c_int,
+    ]
+    self.lib.Sub.argtypes = [
+      self.array_1d_float,
+      self.array_1d_float,
+      ctypes.c_double,
+      self.array_1d_float,
+      ctypes.c_int
+    ]
 
   def dot(self, A, B):
     #print("{} {}".format(min(A.data), max(A.data)), file=stderr)
@@ -23,5 +37,8 @@ class GoParallelizer:
     self.lib.Dot(A.indptr, len(A.indptr), A.indices, len(A.indices), A.data, len(A.data), B, len(B), result)
     return result
 
+  def datadd(self, A, B, scalar, result):
+    self.lib.Add(A, B, scalar, result, len(A))
 
-
+  def datsub(self, A, B, scalar, result):
+    self.lib.Sub(A, B, scalar, result, len(A))

@@ -6,6 +6,7 @@ from scipy.sparse import linalg
 from sksparse.cholmod import cholesky
 from time import time
 from go_parallelizer import GoParallelizer
+import line_profiler
 
 gp = GoParallelizer()
 def datdot(A, B):
@@ -330,16 +331,18 @@ def pcg(x, b, A, get_z, min_err=1e-7):
             #raise Exception('Division by 0 in CG')
         
         alp = zr / pAp
-        x += alp * p
-        r -= alp * Ap
-
+        gp.datadd(x, p, alp, x) 
+        gp.datsub(r, Ap, alp, r)
+        #x += alp * p
+        #r -= alp * Ap
         now = time()
         z = get_z(r)
         pcg.get_z += time() - now
         now = time()
         beta = z.T @ r / zr
         pcg.at += time() - now
-        p = z + beta * p
+        gp.datadd(z, p, beta, p)
+        #p = z + beta * p
         zr *= beta
 
     return x
