@@ -1,0 +1,56 @@
+Timer unit: 1e-06 s
+
+Total time: 306.419 s
+File: /home/jguillotteblouin/project/src/gen_arc.py
+Function: pcg at line 300
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   300                                           @profile
+   301                                           def pcg(x, b, A, get_z, min_err=1e-7):
+   302         6         63.0     10.5      0.0      now = time()
+   303         6     115583.0  19263.8      0.0      r = b - datdot(A, x)
+   304         6         41.0      6.8      0.0      pcg.dot += time() - now
+   305         6        133.0     22.2      0.0      pcg.dotShape.add((A.shape, x.shape))
+   306         6          8.0      1.3      0.0      now = time()
+   307         6      39339.0   6556.5      0.0      z = get_z(r)
+   308         6         24.0      4.0      0.0      pcg.get_z += time() - now
+   309         6          6.0      1.0      0.0      p = z
+   310         6          3.0      0.5      0.0      now = time()
+   311         6      15044.0   2507.3      0.0      zr = z.T @ r
+   312         6         50.0      8.3      0.0      pcg.at += time() - now
+   313
+   314         6          8.0      1.3      0.0      while True:
+   315      7674     149497.0     19.5      0.0          if np.abs(zr) < min_err:
+   316         6         10.0      1.7      0.0              break
+   317      7668      38289.0      5.0      0.0          if zr == 0:
+   318                                                       zr = 1e-20
+   319                                                       print("changed zr")
+   320                                                       #raise Exception('Division by 0 in CG')
+   321
+   322      7668      16038.0      2.1      0.0          now = time()
+   323      7668   55842093.0   7282.5     18.2          Ap = datdot(A, p)
+   324      7668      32461.0      4.2      0.0          pcg.dot += time() - now
+   325      7668     101172.0     13.2      0.0          pcg.dotShape.add((A.shape, p.shape))
+   326      7668      10361.0      1.4      0.0          now = time()
+   327      7668    3756618.0    489.9      1.2          pAp = p.T @ Ap
+   328      7668      25215.0      3.3      0.0          pcg.at += time() - now
+   329      7668      52031.0      6.8      0.0          if pAp == 0:
+   330                                                       pAp = 1e-20
+   331                                                       print("changed pAp")
+   332                                                       #raise Exception('Division by 0 in CG')
+   333
+   334      7668      18427.0      2.4      0.0          alp = zr / pAp
+   335      7668   69451654.0   9057.3     22.7          x += alp * p
+   336      7668   64413870.0   8400.3     21.0          r -= alp * Ap
+   337
+   338      7668      31453.0      4.1      0.0          now = time()
+   339      7668   40486019.0   5279.9     13.2          z = get_z(r)
+   340      7668      31837.0      4.2      0.0          pcg.get_z += time() - now
+   341      7668      10814.0      1.4      0.0          now = time()
+   342      7668    3724652.0    485.7      1.2          beta = z.T @ r / zr
+   343      7668      24494.0      3.2      0.0          pcg.at += time() - now
+   344      7668   67990912.0   8866.8     22.2          p = z + beta * p
+   345      7668      41183.0      5.4      0.0          zr *= beta
+   346
+   347         6         10.0      1.7      0.0      return x

@@ -8,6 +8,68 @@ import (
 	"unsafe"
 )
 
+//export Add
+func Add(A *C.double, B *C.double, scalar C.double, result *C.double, lenVec C.int) {
+	sliceA := (*[1 << 30]C.double)(unsafe.Pointer(A))[:lenVec:lenVec]
+	sliceB := (*[1 << 30]C.double)(unsafe.Pointer(B))[:lenVec:lenVec]
+	sliceResult := (*[1 << 30]C.double)(unsafe.Pointer(result))[:lenVec:lenVec]
+
+        procs := runtime.NumCPU()
+        blockSize := len(sliceA) / procs
+        var wg sync.WaitGroup
+        wg.Add(procs)
+
+        for proc := 0; proc < procs; proc++ {
+		firstCol := proc * blockSize
+                endCol := (proc + 1) * blockSize
+                if proc == procs-1 {
+                        endCol = len(sliceA)
+                }
+
+		go func(firstCol, endCol int) {
+			for i := firstCol; i < endCol; i++ {
+				sliceResult[i] = sliceA[i] + sliceB[i] * scalar
+			}
+
+			wg.Done()
+		}(firstCol, endCol)
+	}
+
+	wg.Wait()
+}
+
+// Logic is the same as `Add` except for the - vs + sign in the loop.
+// We keep them separate because it was slightly faster that way.
+//export Sub
+func Sub(A *C.double, B *C.double, scalar C.double, result *C.double, lenVec C.int) {
+        sliceA := (*[1 << 30]C.double)(unsafe.Pointer(A))[:lenVec:lenVec]
+        sliceB := (*[1 << 30]C.double)(unsafe.Pointer(B))[:lenVec:lenVec]
+        sliceResult := (*[1 << 30]C.double)(unsafe.Pointer(result))[:lenVec:lenVec]
+
+        procs := runtime.NumCPU()
+        blockSize := len(sliceA) / procs
+        var wg sync.WaitGroup
+        wg.Add(procs)
+
+        for proc := 0; proc < procs; proc++ {
+                firstCol := proc * blockSize
+                endCol := (proc + 1) * blockSize
+                if proc == procs-1 {
+                        endCol = len(sliceA)
+                }
+
+                go func(firstCol, endCol int) {
+                        for i := firstCol; i < endCol; i++ {
+                                sliceResult[i] = sliceA[i] - sliceB[i] * scalar
+                        }
+
+                        wg.Done()
+                }(firstCol, endCol)
+        }
+
+        wg.Wait()
+}
+
 //export Dot
 func Dot(indptr *C.int, len_indptr C.int, indices *C.int, len_indices C.int, data *C.double, len_data C.int, vec *C.double, len_vec C.int, result *C.double) {
 	sliceIndptr := (*[1 << 30]C.int)(unsafe.Pointer(indptr))[:len_indptr:len_indptr]
