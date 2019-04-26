@@ -18,6 +18,9 @@ go get github.com/golang/protobuf/protoc-gen-go
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
 mkdir -p "$GOPATH/src/github.com/jonathanGB"
-ln -s "$(pwd)/.." "$GOPATH/src/github.com/jonathanGB/project"
+
+if [ ! -f "$GOPATH/src/github.com/jonathanGB/cs205-project" ]; then
+	ln -s "$(pwd)/.." "$GOPATH/src/github.com/jonathanGB/cs205-project"
+fi
 
 ./proto.sh
