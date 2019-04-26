@@ -10,6 +10,7 @@ class GoParallelizer:
   def __init__(self):
     self.array_1d_int = npct.ndpointer(dtype=np.int32, ndim=1, flags='C')
     self.array_1d_float = npct.ndpointer(dtype=np.float, ndim=1, flags='C')
+    """
     self.lib = ctypes.cdll.LoadLibrary("./go/GoParallelizer.so")
     self.lib.Dot.argtypes = [
       self.array_1d_int, ctypes.c_int, 
@@ -32,6 +33,7 @@ class GoParallelizer:
       self.array_1d_float,
       ctypes.c_int
     ]
+    """
     self.stub = pb_grpc.GreeterStub(grpc.insecure_channel("localhost:8080"))
     print(self.stub.SayHello(pb.HelloRequest(name="Jonathan")))
 
@@ -47,3 +49,6 @@ class GoParallelizer:
 
   def datsub(self, A, B, scalar, result):
     self.lib.Sub(A, B, scalar, result, len(A))
+
+if __name__ == "__main__":
+  gp = GoParallelizer()

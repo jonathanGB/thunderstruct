@@ -5,3 +5,4 @@ __pycache__
 *.x
 *.so
 *.h
+*.pyc
