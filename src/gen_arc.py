@@ -67,7 +67,8 @@ def gen_arc(b, leader=None, eta=2, also=False, max_n=1000, h=1, mg=False, method
     Phis, _, bs = [], [], [b]
     Phi2s = []
     # Stop after max_n iterations
-    for _ in range(max_n):
+    for i in range(max_n):
+        print(f"Iteration {i}")
         b = bs[-1].copy()
         
         # Solve for potential with laplacian pde
