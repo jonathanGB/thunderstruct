@@ -4,20 +4,19 @@
 
 
 
-float *dot(int* indptr, int indptrlen, int* indA, int lenindA, double* A, int lenA, double* B, int size_arr) {
+void dot(double* ret, int* indptr, int indptrlen, int* indA, int lenindA, double* A, int lenA, double* B, int size_arr) {
 	//MPI_Init(&argc, &argv); // Initialize 
 	//MPI_Comm_size(MPI_COMM_WORLD, &np);
 	//MPI_Comm_rank(MPI_COMM_WORLD, &pid); 
-    
-    double * ret;
+    //double * ret;
     int rows = indptrlen - 1;
     //printf("number of rows:  %d \n", rows);
-    ret = (double *)malloc(sizeof(double*)* rows);
+    //ret = (double *)malloc(sizeof(double*)* rows);
     int i; 
     int j;
 
-     #pragma omp parallel shared(A, B, ret) private(i,j){
-     #pragma omp for schedule (static, chunk)
+    #pragma omp parallel shared(A, B, ret) private(i,j){
+    #pragma omp for schedule (static, chunk)
 
     int ptr;
     int ptrtemp;
@@ -41,6 +40,7 @@ float *dot(int* indptr, int indptrlen, int* indA, int lenindA, double* A, int le
 
     	}
     	//printf("sum term here %f \n", sum);
+        printf("sum: %f", sum);
     	ret[i-1] = sum; 
     
 
@@ -49,16 +49,16 @@ float *dot(int* indptr, int indptrlen, int* indA, int lenindA, double* A, int le
 
 
 	//}
-    return ret;
+    //return ret;
 }
 
-double *vecaddn(double* A, double* B, int lenA, double scaleA, double scaleB){
+void vecaddn(double* ret, double* A, double* B, int lenA, double scaleA, double scaleB){
 	//MPI_Init(&argc, &argv); // Initialize 
 	//MPI_Comm_size(MPI_COMM_WORLD, &np);
 	//MPI_Comm_rank(MPI_COMM_WORLD, &pid); 
 	
-	double *ret;
-    ret = (double *)malloc(sizeof(double)* lenA);
+	//double *ret;
+    //ret = (double *)malloc(sizeof(double)* lenA);
     int i; 
 	     
     #pragma omp parallel shared(A, B, ret) private(i){
@@ -70,7 +70,7 @@ double *vecaddn(double* A, double* B, int lenA, double scaleA, double scaleB){
 	        printf("%f \n",scaleA);
 	    }	
 		
-	    return ret;
+	    //return ret;
 
 }
 

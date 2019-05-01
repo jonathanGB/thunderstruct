@@ -15,30 +15,34 @@ class Math_ops:
 		self.array_2d_float = npct.ndpointer(dtype=np.double, ndim=2, flags='C')
 		
 		#initial arguement
-		self.math.dot.argtypes = [ self.array_1d_int, ctypes.c_int, self.array_1d_int, ctypes.c_int,  self.array_1d_float, ctypes.c_int, 
+		self.math.dot.argtypes = [self.array_1d_float, self.array_1d_int, ctypes.c_int, self.array_1d_int, ctypes.c_int,  self.array_1d_float, ctypes.c_int, 
       self.array_1d_float, ctypes.c_int]
-		self.math.vecaddn.argtypes 	= [self.array_1d_float,self.array_1d_float,ctypes.c_int, ctypes.c_double, ctypes.c_double]
-		self.math.test_trans.argtypes = [self.array_2d_float]
+		self.math.vecaddn.argtypes 	= [self.array_1d_float, self.array_1d_float,self.array_1d_float,ctypes.c_int, ctypes.c_double, ctypes.c_double]
+		self.math.test_trans.argtypes = None
 
 
 	def dot(self, A, B):
 		#b is just a single vector, not a sparse matrix
 		#a is a full sparse matrix 
 		#result time
-		self.math.dot.restype =  npct.ndpointer(dtype=ctypes.c_double, shape=B.shape)
+		res = np.zeros(len(A.data),dtype = "float64")
+		print(res)
+		self.math.dot.restype = None
+		#npct.ndpointer(dtype=ctypes.c_double, shape=B.shape)
 
 		#return self.lib.Dot(A.indptr, len(A.indptr), A.indices, len(A.indices), A.data, len(A.data), B, len(B))
- 
 		#npct.ndpointer(dtype=ctypes.c_double, shape=B.shape)	
-		
-		return np.frombuffer(self.math.dot(A.indptr, len(A.indptr), A.indices, len(A.indices), A.data, len(A.data), B.astype("double"), len(B)))
+		print("______________C data___________")
+		self.math.dot(res, A.indptr, len(A.indptr), A.indices, len(A.indices), A.data, len(A.data), B.astype("double"), len(B))
+		return res
 		
 	
 	def vecaddn(self, A, B, scaleA, scaleB):
 		#simply two vectors
-
+		res = np.zeros(len(A), dtype="float64")
 		self.math.vecaddn.restype= npct.ndpointer(dtype=self.array_1d_float, shape=len(A))
-		return	np.frombuffer(self.math.vecaddn(A, B, len(B), scaleA, scaleB))
+		self.math.vecaddn(res, A, B, len(B), scaleA, scaleB)
+		return	res
 
 
 	def test_trans(self):

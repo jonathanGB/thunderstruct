@@ -3,7 +3,7 @@ from visualization import movie
 import numpy as np
 import time
 
-b = boundary2((150, 150))
+b = boundary2((250, 250))
 print("b: {}".format(b.shape))
 
 now = time.time()
