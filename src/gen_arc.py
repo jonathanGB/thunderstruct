@@ -28,7 +28,7 @@ def datdot(A, B):
         #    print(res)
         #    print(res2)
         #    print("\n\n")
-        if datdot.veccount % 500 == 0:
+        if datdot.veccount % 10 == 0:
         #    print("Mean of dot prod for numpy: %fμs" % (np.array(datdot.restimes).mean()*1000000))
         #    print("Mean of dot prod for go-parallel: %fμs" % (np.array(datdot.res2times).mean()*1000000))#datdot.vectime/datdot.veccount)
         #    print()

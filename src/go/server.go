@@ -5,7 +5,6 @@ import (
 	"log"
 	"net"
 	"runtime"
-	"sync"
 
 	pb "github.com/jonathanGB/cs205-project/src/go/distributed"
 	"google.golang.org/grpc"
@@ -23,21 +22,9 @@ func (p *server) Dot(in *pb.DotRequest, stream pb.Parallelizer_DotServer) error 
 	sliceLen := len(sliceIndptr) - 1
 	indptrOffset := sliceIndptr[0]
 
-	procs := runtime.NumCPU() - 1
-	resps := make(chan *pb.DotReply)
-	finalStatus := make(chan error, 1)
+	procs := runtime.NumCPU()
+	resps := make(chan *pb.DotReply, procs)
 	blockSize := sliceLen / procs
-	var wg sync.WaitGroup
-	wg.Add(procs)
-
-	go func() {
-		for resp := range resps {
-			if err := stream.Send(resp); err != nil {
-				finalStatus <- err
-			}
-		}
-		finalStatus <- nil
-	}()
 
 	for proc := 0; proc < procs; proc++ {
 		firstRow := proc * blockSize
@@ -47,13 +34,12 @@ func (p *server) Dot(in *pb.DotRequest, stream pb.Parallelizer_DotServer) error 
 		}
 
 		go func(firstRow, endRow int) {
+			lenResults := endRow - firstRow
+			results := make([]float64, lenResults, lenResults)
 			j := sliceIndptr[firstRow] - indptrOffset
 			for i := firstRow; i < endRow; i++ {
 				if sliceIndptr[i] == sliceIndptr[i+1] {
-					resps <- &pb.DotReply{
-						LocalRow: int32(i),
-						Result:   0,
-					}
+					results[i-firstRow] = 0.0
 					continue
 				}
 
@@ -66,19 +52,21 @@ func (p *server) Dot(in *pb.DotRequest, stream pb.Parallelizer_DotServer) error 
 					j++
 				}
 
-				resps <- &pb.DotReply{
-					LocalRow: int32(i),
-					Result:   sum,
-				}
+				results[i-firstRow] = sum
 			}
 
-			wg.Done()
+			resps <- &pb.DotReply{Result: results, Offset: int32(firstRow)}
 		}(firstRow, endRow)
 	}
 
-	wg.Wait()
-	close(resps)
-	return <-finalStatus
+	for i := 0; i < procs; i++ {
+		if err := stream.Send(<-resps); err != nil {
+			fmt.Println("err streaming")
+			fmt.Println(err)
+			return err
+		}
+	}
+	return nil
 }
 
 func main() {

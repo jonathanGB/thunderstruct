@@ -4,6 +4,7 @@ import "C"
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"runtime"
 	"sync"
@@ -125,10 +126,12 @@ func DistributedDot(indptr *C.int, len_indptr C.int, indices *C.int, len_indices
 					break
 				}
 				if err != nil {
+					fmt.Println("Err receiving...")
 					panic(err)
 				}
 
-				sliceResult[firstRow+int(resp.LocalRow)] = resp.Result
+				resultFirstRow := firstRow + int(resp.Offset)
+				copy(sliceResult[resultFirstRow:resultFirstRow+len(resp.Result)], resp.Result)
 			}
 
 			wg.Done()
