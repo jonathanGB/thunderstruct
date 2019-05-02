@@ -6,7 +6,7 @@ from scipy.sparse import linalg
 from sksparse.cholmod import cholesky
 from time import time
 from go_parallelizer import GoParallelizer
-import line_profiler
+#import line_profiler
 
 gp = GoParallelizer()
 def datdot(A, B):
@@ -18,7 +18,9 @@ def datdot(A, B):
         #res2 = A.dot(B)
         #datdot.restimes.append(time() - now1)
         #now1 = time()
-        res = gp.dot(A, B)
+        res = gp.distributed_dot(A, B)
+        #res = gp.dot(A, B)
+
         #datdot.res2times.append(time() - now1)
         datdot.vectime += time() - now
         #if not np.array_equal(res, res):

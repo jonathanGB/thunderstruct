@@ -3,17 +3,21 @@ syntax = "proto3";
 package distributed;
 
 // The greeting service definition.
-service Greeter {
+service Parallelizer {
   // Sends a greeting
-  rpc SayHello (HelloRequest) returns (HelloReply) {}
+  rpc Dot (DotRequest) returns (stream DotReply) {}
 }
 
 // The request message containing the user's name.
-message HelloRequest {
-  string name = 1;
+message DotRequest {
+  repeated int32 indptr = 1;
+  repeated int32 indices = 2;
+  repeated double data = 3;
+  repeated double vec = 4;
 }
 
 // The response message containing the greetings
-message HelloReply {
-  string message = 1;
+message DotReply {
+  int32 local_row = 1;
+  double result = 2;
 }
