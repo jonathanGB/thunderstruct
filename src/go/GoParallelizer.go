@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	pb "github.com/jonathanGB/cs205-project/src/go/distributed"
@@ -101,12 +103,16 @@ func DistributedDot(indptr *C.int, len_indptr C.int, indices *C.int, len_indices
 		}
 
 		go func(firstRow, endRow, server int) {
+			times := []string{}
+			now := time.Now()
 			conn, err := grpc.Dial(addresses[server], grpc.WithInsecure())
 			if err != nil {
 				panic(err)
 			}
 			defer conn.Close()
+			times = append(times, fmt.Sprintf("Dialing: %dµs", time.Since(now)/time.Microsecond))
 
+			now = time.Now()
 			subIndptr := sliceIndptr[firstRow : endRow+1]
 			subStart, subEnd := subIndptr[0], subIndptr[len(subIndptr)-1]
 			req := &pb.DotRequest{
@@ -115,11 +121,16 @@ func DistributedDot(indptr *C.int, len_indptr C.int, indices *C.int, len_indices
 				Data:    sliceData[subStart:subEnd],
 				Vec:     sliceVec,
 			}
+			times = append(times, fmt.Sprintf("Creating request object: %dµs", time.Since(now)/time.Microsecond))
+			now = time.Now()
 			stream, err := pb.NewParallelizerClient(conn).Dot(context.Background(), req)
 			if err != nil {
 				panic(err)
 			}
+			times = append(times, fmt.Sprintf("Send request: %dµs", time.Since(now)/time.Microsecond))
 
+			now = time.Now()
+			var totalCopy time.Duration
 			for {
 				resp, err := stream.Recv()
 				if err == io.EOF {
@@ -131,9 +142,12 @@ func DistributedDot(indptr *C.int, len_indptr C.int, indices *C.int, len_indices
 				}
 
 				resultFirstRow := firstRow + int(resp.Offset)
+				innerNow := time.Now()
 				copy(sliceResult[resultFirstRow:resultFirstRow+len(resp.Result)], resp.Result)
+				totalCopy += time.Since(innerNow)
 			}
-
+			times = append(times, fmt.Sprintf("Receive all streaming: %dµs (%dµs spent copying)", time.Since(now)/time.Microsecond, totalCopy/time.Microsecond))
+			fmt.Println(strings.Join(times, " --- "))
 			wg.Done()
 		}(firstRow, endRow, server)
 	}

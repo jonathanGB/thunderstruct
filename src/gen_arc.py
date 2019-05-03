@@ -19,7 +19,9 @@ def datdot(A, B):
         #datdot.restimes.append(time() - now1)
         #now1 = time()
         res = gp.distributed_dot(A, B)
-        #res = gp.dot(A, B)
+        othernow = time()
+        res2 = gp.dot(A, B)
+        print(f"1 node dot: {(time()-othernow)*1000000}\n")
 
         #datdot.res2times.append(time() - now1)
         datdot.vectime += time() - now
@@ -38,6 +40,9 @@ def datdot(A, B):
         datdot.matcount += 1
         res = A.dot(B)
         datdot.mattime += time() - now
+
+        print(".........Mean of mat mult %fμs" % (datdot.mattime/datdot.matcount*1000000))
+
         return A.dot(B)
     return res
 
