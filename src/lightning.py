@@ -3,11 +3,11 @@ from visualization import movie
 import numpy as np
 from time import time
 
-b = boundary2((700, 700))
+b = boundary2((1500, 1500))
 print("b: {}".format(b.shape))
 
 now = time()
-Phis_dbm, Phis_vis_dbm = gen_arc(b, method='ipcg', also=True, max_n=2500, eta=3)
+Phis_vis_dbm = gen_arc(b, method='ipcg', also=True, max_n=3000, eta=3)
 total = time() - now
 print("pcg @: {}s ({}%)\npcg.dot: {}s ({}%)\npcg.get_z: {}s ({}%)\n----------------\ngen_arc: {}"
   .format(pcg.at, pcg.at/total*100, pcg.dot, pcg.dot/total*100, pcg.get_z, pcg.get_z/total*100, total))

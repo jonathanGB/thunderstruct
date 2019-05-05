@@ -6,7 +6,7 @@ from scipy.sparse import linalg
 from sksparse.cholmod import cholesky
 from time import time
 from go_parallelizer import GoParallelizer
-import line_profiler
+import sys
 
 gp = GoParallelizer()
 def datdot(A, B):
@@ -49,7 +49,6 @@ datdot.res2times = []
 
 # Generate single leader with boundary b
 def gen_arc(b, leader=None, eta=2, also=False, max_n=1000, h=1, mg=False, method='ipcg', mg_args={}):
-    b = b.copy()
     f = np.zeros_like(b.flatten()) if leader is None else h ** 2 * leader.flatten()
     L = lapl(b.shape)
     
@@ -64,36 +63,38 @@ def gen_arc(b, leader=None, eta=2, also=False, max_n=1000, h=1, mg=False, method
     else:
         solve = lambda B, U: solve_lapl(B, f, L, x0=U, method=method)
         
-    Phis, _, bs = [], [], [b]
+    Phis, new_b = None, b.copy()
     Phi2s = []
     # Stop after max_n iterations
-    for _ in range(max_n):
-        b = bs[-1].copy()
-        
+    for i in range(max_n):
+        print(f"Iteration {i}")
+        totalSizePhi2s = sys.getsizeof(Phi2s)
+        for l in Phi2s:
+            totalSizePhi2s += sys.getsizeof(l)
+        print(f"Size of Phi2s: {totalSizePhi2s}")
+
         # Solve for potential with laplacian pde
-        prev = Phis[-1].flatten() if Phis else None
-        Phi = solve(b, prev).reshape(b.shape)
-        Phi = np.where(~np.isnan(b), b, Phi) # reapply boundary conditions
+        prev = Phis.flatten() if Phis is not None else None
+        Phi = solve(new_b, prev).reshape(new_b.shape)
+        Phi = np.where(~np.isnan(new_b), new_b, Phi) # reapply boundary conditions
         
         # Append richardson error for adaptive mesh
         # Ts.append(richardson(Phi, L.dot(L) - lapl(b.shape, mul=2)))
         if also:
-            b2 = b.copy()
+            b2 = new_b.copy()
             b2[:, [0, -1]] = 1
             Phi2 = solve(b2, Phi2s[-1].flatten() if Phi2s else None).reshape(b.shape)
-            Phi2 = np.where(~np.isnan(b2), b2, Phi2)
-            Phi2s.append(Phi2)
+            Phi2s.append(np.where(~np.isnan(b2), b2, Phi2))
         
         # Randomly select growth point and add to boundary
         growth = add_point(Phi, eta, force_pos=True)
-        if b[growth] == 1:
+        if new_b[growth] == 1:
             break # End if we've reached the ground
-        b[growth] = 0
-        bs.append(b)
+        new_b[growth] = 0
         
         # Re apply boundary conditions
-        Phis.append(np.where(~np.isnan(b), b, Phi))
-    return np.array(Phis, dtype=float), np.array(Phi2s, dtype=float) if also else None
+        Phis = np.where(~np.isnan(new_b), new_b, Phi)
+    return np.array(Phi2s, dtype=float) if also else None
 
 # Computes multigrid arrays for a problem (restriction and interpolation operators) just once
 def get_mg_arrays(bound_shape, levels=3, v_up=2, v_down=0, scale=4, method='ipcg'):

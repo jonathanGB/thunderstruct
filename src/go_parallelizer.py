@@ -33,7 +33,7 @@ class GoParallelizer:
   def dot(self, A, B):
     #print("{} {}".format(min(A.data), max(A.data)), file=stderr)
     #self.lib.Dot.restype = npct.ndpointer(dtype=ctypes.c_double, shape=B.shape)
-    result = np.zeros(B.shape, dtype=np.float)
+    result = np.empty(B.shape, dtype=np.float)
     self.lib.Dot(A.indptr, len(A.indptr), A.indices, len(A.indices), A.data, len(A.data), B, len(B), result)
     return result
 

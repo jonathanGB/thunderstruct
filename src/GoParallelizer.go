@@ -94,6 +94,7 @@ func Dot(indptr *C.int, len_indptr C.int, indices *C.int, len_indices C.int, dat
 			j := sliceIndptr[firstRow]
 			for i := firstRow; i < endRow; i++ {
 				if sliceIndptr[i] == sliceIndptr[i+1] {
+					sliceResult[i] = 0.0
 					continue
 				}
 
