@@ -58,7 +58,7 @@ In the above image, the extreme branching pattern of tip-biased DLA can be seen,
 ## Dielectric Breakdown Model
 
 
-![DBMout](figures/DBMout.png)
+![DBMout](figures/DMBout.png)
 
 The dielectric breakdown model is a method for simulating lightning with first-principles in mind. The algorthm can be summarized in the following steps:
 
