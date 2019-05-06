@@ -3,14 +3,14 @@
 Fractal growth is a comutationally intensive simulation which has typically ignored traditionoal first principles in physics in order to increase speed. Lightning is a well understood phenomena that can be simulated accurately with the Dielectric Breakdown Model, but it is computationally expensive to do so. We seek to optimize this simulation with HPC through the parallelization of the simualtion at each time step using a multi-node architecture on Google Cloud Engine. Using this approach, we obtained a non-trivial speedup and amanged to simulate lightning growth on a 1500x1500 grid.
 
 
-# Description of problem and the need for HPC and/or Big Data
+# Problem Statement
 
 Fractal growth is a common natural phenomena; from the growth of blood vessels to the dispersion of electricity via lightning, the pattern is seen across disciplines. Given their commonplace naurre, the driving forces behind many of these processes are well understood. In particular, first-principles in physics dictate the flow of electricity in lightning with a high-level of accurracy. Yet, the models used to simulate its growth suffer from both inherent model-based flaws, as well as computational processing limits. 
 
 In order to accurately simulate lightning based on first-principles, the Dielectric Breakdown Model is used. In this method, the charge distribution over a given grid is calculated by solving the Poisson equation. However, solving this partial differential equation is compuataionally expensive, requiring an expansion of the grid used. In order to solve for the growth at each time step on a 100 x 100 grid, one must solve for the dot product of a 10,000x10,000 matrix and a 10,000 element vector (or another square matrix). Obviously, this $O(N^2)$ scaling is inefficient but luckily matrix operations are easily parallelizable in theory. 
 
 
-# Description of solution and comparison with existing work on the problem
+# Previous Work
 
 Lightning is a form of electric discharge and grows in a fractal pattern. This occurs when there is a alarge enough chage between two objects. In many cases, and in the case of our simulations, this is the difference in a cloud of electrons and the ground. It begins with an initial negative charge distribution, the initial breakdown and then expands to another point, creating another breakdown. This extension from the initial breakdown to the point with the largest difference is known as the stepped leader. The entire process is quick; it only takes around 35ms (CITE). However, the process rapidly iterates with the negative charges of the first stepped leader laying the groundwork for subsequent bolts. Each bolt follows in the path of . the previous, albeit much faster (1-2ms) given the bias of the first stepped-leader. Moreover,  given the fractal pattern lightning ultimately achieves, it is classified as Laplacian growth. This is critical to much early work as Laplacian growth is a well understood concept and many approaches can yield accurate shapes. These two features of lightning, stepped leader behavior and laplacian growth, are the two primary targets of previous work in the area. 
 
@@ -57,8 +57,7 @@ In the above image, the extreme branching pattern of tip-biased DLA can be seen,
 
 ## Dielectric Breakdown Model
 
-
-![DBMout](figures/DMBout.png)
+![DBMout](figures/DBM.png)
 
 The dielectric breakdown model is a method for simulating lightning with first-principles in mind. The algorthm can be summarized in the following steps:
 
@@ -102,7 +101,7 @@ However, as with DLA, this method scales poorly with problem size as the linear 
 ![DBMtime](figures/DBMtime.png)
 
 
-# Description of your model and/or data in detail: where did it come from, how did you acquire it, what does it mean, etc.
+# Model Origins
 
 The above methods, tip-biased DLA and DBM with IPCG were both implemented for the final project of AM205. However, these methods proved to be both incredibly memory intensive and computationally slow. Simulting (INSERT DATA HERE). Even with these improvements over the original implementations of the respective algorithms, the problem could still be solved more efficiently. When implemented, High Performance Computing was not considered and all simulations were generated on local machines. As such, selecting these models to apply HPC to was a natural decision.
 
@@ -111,9 +110,11 @@ However, after some initial analysis, it appeared DBM was a far better candidate
 With DBM, there is still an explicit dependence from step to step, but the process of determining the next step of the stepped leader at a given timepoint is not sequential in nature. In DLA, a random walk, the method of determining the next step, cannot be parallelized but in DBM the solving of the linear equation can be. Thus, we focused our efforts on this equation. 
 
 
-#Technical description of the parallel application and programming models used
+#Goal
 
 Rendering visually appealing lightning is the goal and as such we needed to generate lightning on a 1500x1500 grid, which is similar to the resolution of standard HD screens (1920×1080). Ultimately, our we sought to optimize this simulation with HPC through the parallelization of the simulation along the time domain using a multi-thread, multi-node architecture on Google Cloud Engine and Amazon Web Services. Using this approach, we obtained a non-trivial speedup and managed to simulate lightning growth on a 1500x1500 grid. 
+
+# Profiling
 
 Initial profiling of the code revealed a massive bottleneck in the dot product used in the IPCG method. This method was account for over 40% of the computation time and scaled poorly with grid size. Thus, we sought to optimize this step in particular. However, we quckly ran into a problem with this approach: the operation was already highly optimized.
 
@@ -125,4 +126,68 @@ During the original implementation of DBM, the choice was made to use sparse mat
 
 The bottleneck was not due to the operation taking a long time to complete, but rather the sheer number of calls. On a 100x100 grid, the dot product is called 90088 times, with 88200 of these being sparse-matrix-dense-vector dot products and the remaining 1888 being sparse-matrix-sparse-matrix dot products, accounting for ~50% of the total time of execution. Each sparse-matrix-dense-vector dot product took about $69 \mu s$ and $1022 \mu s $ for sparse-matrix-sparse-matrix dot products. As such,  parallelization was more difficult than expected as parallization can intorduce a massive communication overhead. This overhead can easily dominate the short function calls and negate any gains from parallelization.
 
-In order to do this, we leveraged both thread-level parallelism with OpenMP and goroutines and node-level parallelism with MPI and gRPC. Natrually, these methods were implemented in two different implementations. One implementation utilized the techniques learned in class, OpenMP and MPI while the other used more advanced techniques with golang. 
+# Initial Attempts
+In order to do this, we leveraged both thread-level parallelism with OpenMP and goroutines and node-level parallelism with MPI and gRPC. Natrually, these methods were implemented in two different implementations. One implementation utilized the techniques learned in class, OpenMP and MPI while the other used more advanced techniques with golang. Moreover, we attempted to accelerate the dot prodcut of sparse matrices using PyCuda. Of these three initial implementations, only two were successful, albeit in altered forms. PyCuda was eliminated based on heavy data copying costs, while MPI and gRPC suffered from similar overheads due to cluster latency (see roadblocks). 
+
+# Discoveries
+
+## Shared Libraries vs Subprocess
+
+Given the model was implemented in python already and a complete rewrite in C++ would be incredibly difficult with the number of library dependencies, a method of calling functions in other languages was needed. We were then faced with a decision between calling . functions from a shared library (ctypes) and spawning a python subprocess. The table below compares the time to spawn a subprocess or call a shared library with the time to complete one dot product on a 1500 x 1500 grid:
+
+|                | Time Spawn $\mu s$ | % Matrix-Matrix Dot  | % Matrix-Vector Dot |
+|----------------|--------------------|-------------------------|-------------------------|
+| Subprocess     | 4701               | 52                      | 2                       |
+| Shared Library | 845                | 9                       | .4                      |
+
+Beyond simply being approximately 5x faster than a subprocess, a shared library is significantly faster on subsequent calls than the initial call:
+
+|        | Time Spawn $\mu s$ |
+|--------|--------------------|
+| First Call  | 1270               |
+| Second Call | 72                 |
+
+## Sparse Matrices
+
+We quickly discovered that the matrices we were working with were extremely sparse:
+
+
+|        | % Non-zero Elements |
+|--------|---------------------|
+| Matrix | .04                 |
+| Vector | 95                  |
+
+This meant that even though we had large matrices, we could encode them into much smaller arrays. Sparse matrices work by encoding the data and indices of non-zero elements in the matrices in an easy-to-access 3 array system. While the in-depth implementation is irrelevant for the purposes of this experiment,  the use of sparse matrices significantly accelerates matrix operations by ignoring multiplcation of zero elements.
+
+More relevant to our implementation, however, was the fact that any implementation had to leverage this previous speedup rather than revert back to dense matrices. 
+
+## Vector Addition
+
+In further profiling, it was discovered that vector addition operations account for a signifcant portion of the runtime of the function pcg in the code. Three lines, addition assignment,  subtraction assignment and addition, all followed by multiplication (i.e. a += b * c) accounted for 65.5% of the runtime of pcg on a 1500x1500 grid. 
+
+Quickly parallelizing these processes (thread-level with goroutines) yielded a 66% speedup, reducing the runtime of these three lines to only 19% of pcg.
+
+This was a massive speedup for a trivial solution. This prompted us to search the code for other quickly parallelizable lines that would yield a boost to performance beyond the dot product. 
+
+## Empty vs Zero
+
+One such line was the use of numpy zeros instead of numpy empty. Numpy zeros obviously allocates zeros in a given shape while numpy empty simply sets the object's shape without populating elements.
+
+The Go implementation continues when a row is empty, not when a row is 0. Thus, by initializing elements as empty instead of 0, the code iterates much faster,  moving on to the rows that actually matter sooner. This yielded a 30% speedup on our local machine with a 1500x1500 grid. 
+
+|       | Time ($\mu s$) |
+|-------|----------------|
+| Zeros | 13260          |
+| Empty | 9285           |
+
+# Roadblocks
+
+## PyCuda
+
+## Latency
+
+## Memory Error
+
+# OpenMP + MPI
+
+# Golang (gourouteines + gRPC)
