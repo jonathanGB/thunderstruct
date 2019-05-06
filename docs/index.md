@@ -118,8 +118,8 @@ Initial profiling of the code revealed a massive bottleneck in the dot product u
 
 During the original implementation of DBM, the choice was made to use sparse matrices to drastically increase the speed of matrix operations. This accomplished the goal of speeding up operations, but also meant our baseline code was already extremely fast. Moreover, we leveraged the numpy library further speedup the operations. Under the hood, numpy compiles in C++ and parallelizes many basic operations. Thus, for all intents and purposes, the code was already semi-parallelized. 
 
-![percent](figures/percentgrid.png)
-![matvec](figures/matvec.png)
+![percent](figures/gridpercents.png)
+![matvec](figures/matdot.png)
 ![matmat](figures/matmat.png)
 
 The bottleneck was not due to the operation taking a long time to complete, but rather the sheer number of calls. On a 100x100 grid, the dot product is called 90088 times, with 88200 of these being sparse-matrix-dense-vector dot products and the remaining 1888 being sparse-matrix-sparse-matrix dot products, accounting for ~50% of the total time of execution. Each sparse-matrix-dense-vector dot product took about $69 \mu s$ and $1022 \mu s $ for sparse-matrix-sparse-matrix dot products. As such,  parallelization was more difficult than expected as parallization can intorduce a massive communication overhead. This overhead can easily dominate the short function calls and negate any gains from parallelization.
