@@ -2,11 +2,12 @@
 
 Fractal growth is a comutationally intensive simulation which has typically ignored traditionoal first principles in physics in order to increase speed. Lightning is a well understood phenomena that can be simulated accurately with the Dielectric Breakdown Model, but it is computationally expensive to do so. We seek to optimize this simulation with HPC through the parallelization of the simualtion at each time step using a multi-node architecture on Google Cloud Engine. Using this approach, we obtained a non-trivial speedup and amanged to simulate lightning growth on a 1500x1500 grid.
 
+
 # Description of problem and the need for HPC and/or Big Data
 
 Fractal growth is a common natural phenomena; from the growth of blood vessels to the dispersion of electricity via lightning, the pattern is seen across disciplines. Given their commonplace naurre, the driving forces behind many of these processes are well understood. In particular, first-principles in physics dictate the flow of electricity in lightning with a high-level of accurracy. Yet, the models used to simulate its growth suffer from both inherent model-based flaws, as well as computational processing limits. 
 
-In order to accurately simulate lightning based on first-principles, the Dielectric Breakdown Model is used. In this method, the charge distribution over a given grid is calculated by solving the Poisson equation. However, solving this partial differential equation is compuataionally expensive, requiring an expansion of the grid used. In order to solve for the growth at each time step on a 100 x 100 grid, one must solve for the dot product of a 10,000x10,000 matrix and a 10,000 element vector (or another square matrix). Obviously, this $O(N^2)$ scaling is inefficient but luckily matrix operations are easily parallelizable in theory.
+In order to accurately simulate lightning based on first-principles, the Dielectric Breakdown Model is used. In this method, the charge distribution over a given grid is calculated by solving the Poisson equation. However, solving this partial differential equation is compuataionally expensive, requiring an expansion of the grid used. In order to solve for the growth at each time step on a 100 x 100 grid, one must solve for the dot product of a 10,000x10,000 matrix and a 10,000 element vector (or another square matrix). Obviously, this $O(N^2)$ scaling is inefficient but luckily matrix operations are easily parallelizable in theory. 
 
 
 # Description of solution and comparison with existing work on the problem
@@ -17,7 +18,7 @@ In the past, lightning simulations  have been forced to choose between two parad
 
 ## Diffusion Limited Aggregation (DLA)
 
-(INSERT DLA)
+![DLAout](figures/DLA.png)
 
 To simulate only the shape, one possible appraoch is diffusion limited aggregation (DLA). In this method, there are five critical steps to understand:
 
@@ -45,18 +46,18 @@ The second criticism of the model can be remedied with tip-biasing, an approach 
 
 This also helps remedy the scaling issue as the tip-bias dictates the random walk does not have to walk nearly as far. Thus,  the method helps to remedy the two aforementioned issues with DLA, but still does not take into account physical first-principles. 
 
- (INSERT COMPARISON GRAPH)
+![DLAtime](figures/DLAtime.png)
 The above figure is a comparison of runtimes for tip-biased DLA and normal DLA runtimes.
 
 
-(INSERT TIP_BIASED IMAGE)
+![DLAtipout](figures/DLAtipout.png)
 In the above image, the extreme branching pattern of tip-biased DLA can be seen, far less accurate than other methods in terms of shape, but still not as inaccurate as normal DLA.
 
 
 
 ## Dielectric Breakdown Model
 
-(INSERT DBM OUTPUT)
+![DBMout](figures/DBMout.png)
 
 The dielectric breakdown model is a method for simulating lightning with first-principles in mind. The algorthm can be summarized in the following steps:
 
@@ -97,7 +98,7 @@ $\eta$ is a branching hyperparameter. For the purposes of this report, it is not
 
 However, as with DLA, this method scales poorly with problem size as the linear equation solution gets more and more complicated.
 
-(INSERT TIMES)
+![DBMtime](figures/DBMtime.png)
 
 
 # Description of your model and/or data in detail: where did it come from, how did you acquire it, what does it mean, etc.
@@ -117,9 +118,9 @@ Initial profiling of the code revealed a massive bottleneck in the dot product u
 
 During the original implementation of DBM, the choice was made to use sparse matrices to drastically increase the speed of matrix operations. This accomplished the goal of speeding up operations, but also meant our baseline code was already extremely fast. Moreover, we leveraged the numpy library further speedup the operations. Under the hood, numpy compiles in C++ and parallelizes many basic operations. Thus, for all intents and purposes, the code was already semi-parallelized. 
 
-(INSERT % GRAPH)
-(INSERT MAT VEC DOT)
-(INSERT MAT MAT DOT)
+![percent](figures/percentgrid.png)
+![matvec](figures/matvec.png)
+![matmat](figures/matmat.png)
 
 The bottleneck was not due to the operation taking a long time to complete, but rather the sheer number of calls. On a 100x100 grid, the dot product is called 90088 times, with 88200 of these being sparse-matrix-dense-vector dot products and the remaining 1888 being sparse-matrix-sparse-matrix dot products, accounting for ~50% of the total time of execution. Each sparse-matrix-dense-vector dot product took about $69 \mu s$ and $1022 \mu s $ for sparse-matrix-sparse-matrix dot products. As such,  parallelization was more difficult than expected as parallization can intorduce a massive communication overhead. This overhead can easily dominate the short function calls and negate any gains from parallelization.
 
