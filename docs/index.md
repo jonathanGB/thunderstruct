@@ -131,18 +131,20 @@ In order to do this, we leveraged both thread-level parallelism with OpenMP and 
 
 # Discoveries
 
+As we continued to implement our planned architecture, some key discoveries allowed us to further enhance the performance of the model. 
+
 ## Shared Libraries vs Subprocess
 
 Given the model was implemented in python already and a complete rewrite in C++ would be incredibly difficult with the number of library dependencies, a method of calling functions in other languages was needed. We were then faced with a decision between calling . functions from a shared library (ctypes) and spawning a python subprocess. The table below compares the time to spawn a subprocess or call a shared library with the time to complete one dot product on a 1500 x 1500 grid:
 
-|                | Time Spawn $\mu s$ | % Matrix-Matrix Dot  | % Matrix-Vector Dot |
+|                | Time Spawn ($\mu s$ )| % Matrix-Matrix Dot  | % Matrix-Vector Dot |
 |----------------|--------------------|-------------------------|-------------------------|
-| Subprocess     | 4701               | 52                      | 2                       |
-| Shared Library | 845                | 9                       | .4                      |
+| Subprocess     | 4701               | 2                      | 52                       |
+| Shared Library | 845                | .4                    | .9                 |
 
 Beyond simply being approximately 5x faster than a subprocess, a shared library is significantly faster on subsequent calls than the initial call:
 
-|        | Time Spawn $\mu s$ |
+|        | Time Spawn ($\mu s$) |
 |--------|--------------------|
 | First Call  | 1270               |
 | Second Call | 72                 |
@@ -173,7 +175,7 @@ This was a massive speedup for a trivial solution. This prompted us to search th
 
 One such line was the use of numpy zeros instead of numpy empty. Numpy zeros obviously allocates zeros in a given shape while numpy empty simply sets the object's shape without populating elements.
 
-The Go implementation continues when a row is empty, not when a row is 0. Thus, by initializing elements as empty instead of 0, the code iterates much faster,  moving on to the rows that actually matter sooner. This yielded a 30% speedup on our local machine with a 1500x1500 grid. 
+The Go implementation continues when a row is empty, not when a row is 0. Thus, by initializing elements as empty instead of 0, the code iterates much faster,  moving on to the rows that actually matter sooner. This yielded a 30% speedup on our local machine with a 1500x1500 grid:
 
 |       | Time ($\mu s$) |
 |-------|----------------|
@@ -182,12 +184,35 @@ The Go implementation continues when a row is empty, not when a row is 0. Thus, 
 
 # Roadblocks
 
+While we attempted to implement the proposed architecture without changes, some changes were necessary given the constraints of the technologies we were using.
+
 ## PyCuda
+
+As mentioned before, the runtime of a dot product is fairly short (<10000$ \mu s$ ono 1500 x 1500 grid). Thus, any attempt to parallelize will have to ensure that the communication overhead is not too significant. Communication overheads are greater in shared memory architetures than non-shared memory architectures. Thus, multi-threading introduces less overhead than multi-processing. 
+
+When PyCuda is invoked, it must copy over the data to the GPU before the operation can be executed. This means a significant overhead is introduced. In order to test this, the transfer times of various grid sizes were tested on an AWS g3 instance (see appendix for specifications). These results are tabulated below:
+
+(INSERT TIMES)
+
+As can be seen above, the transfer time far outweighs the time of an operation, resulting in a slowdown for the operation.Thus, PyCuda was abandoned as a possible implementation.
 
 ## Latency
 
+Similar to above, multi-node architectures had to be abandoned due to latency resulting in too great of an overhead. Using a cluster of 8 c5 worker instances and one t2 master instance (see appendix), gRPC was tested but quickly abandoned. With a latency of about 3000 $\mu s$ on a 1080x1080 grid, the latency was significant. Further testing revealed that the average matrix-vector dot product on a 1500x1500 grid was 2184293 $\mu s$:
+
+|      | Time ($\mu s$) | % of Matrix-Vector Dot |
+|------|----------------|------------------------|
+| gRPC | 2184293        | 24,269                 |
+
 ## Memory Error
 
+After approximately 13 hours of real time and approxiamtely 375 hours of compute time on a GCE instance (see appendix), the run failed to generate a 1400x1400 simulation because of memory issues. In order to generate the movie, the array of grids is copied for rendering. This means the (INSERT SIZE) array essentially doubles, resulting in far more memory being used than we expected. As such, we requested an increased memory of 600GB total. In order to prevent the need to rerun in the event of a failed render, we also write the array to disk before rendering. This meant we had to request a total of (INSERT SIZE) in disk size as well.
 # OpenMP + MPI
 
+## Results
+
 # Golang (gourouteines + gRPC)
+
+## Results
+
+# Appendix
