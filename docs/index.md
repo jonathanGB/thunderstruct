@@ -85,7 +85,7 @@ This system of linear equations is where we get the $O(N^2)$ complexity we see i
 
 We can use numerous techniques to solve this, but in the current implementation, we use the Incomplete Poisson Conjugate Gradient (IPCG) method (pseudocode below). This method is similar to the Incomplete Cholesky Conjugate Gradient (ICCG) method but uses a Poisson-specific preconditioner. 
 
-$$Insert pseudo code$$
+![pseudocodeipcg](figures/ipcg.png)
 
 
 The intircaes of the above approach are not critical to understand in the context of this paper. Essentxially, the above method and the Poisson preconditiona allow for only a single matrix muliplication operation is needed at a given iteration of the conjugate gradient. The preconditioner ensures convergence and thus accelerates the simulation of lightning. 
