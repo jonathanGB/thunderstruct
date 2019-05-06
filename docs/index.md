@@ -4,10 +4,12 @@ Fractal growth is a comutationally intensive simulation which has typically igno
 
 
 # Problem Statement
+One of the biggest promises of HPC is allowing for realistic modelling of the physical world. This pursuit is nontrivial as physical descriptors of nature often require high-dimensional space, big data, and intensive computations that do not scale well as spatial or temporal resolution are increased. Models often trade off performance for accuracy as they grow in complexity. One such domain is the use of computing to simulate lightning dispersion as is nucleates from a point in the air towards the ground. These models either rely on naive toy models that essentially propagate a point towards the ground randomly or physical models that rely on electrodynamics and fractal growth to efficiently simulate lightning dispersion. The aim is to implement the physical model through first principles while offseting some of the computing and scaling bottlenecks through HPC principles. 
 
-Fractal growth is a common natural phenomena; from the growth of blood vessels to the dispersion of electricity via lightning, the pattern is seen across disciplines. Given their commonplace naurre, the driving forces behind many of these processes are well understood. In particular, first-principles in physics dictate the flow of electricity in lightning with a high-level of accurracy. Yet, the models used to simulate its growth suffer from both inherent model-based flaws, as well as computational processing limits. 
+Fractal growth is a computationally intensive simulation which has typically ignored traditionally first principles in physics in order to increase speed despite the fact that these growth patterns can be found in a wide-range of of phenomenon from biology to physics and chemistry. Lightning is a well understood phenomena that can be simulated accurately with the Dielectric Breakdown Model, but it is computationally expensive to do so. This model relies on solving discritized differential equations on enormous grids with unfavorable scaling. This has bottlenecked any sort of physical implementation. 
 
 In order to accurately simulate lightning based on first-principles, the Dielectric Breakdown Model is used. In this method, the charge distribution over a given grid is calculated by solving the Poisson equation. However, solving this partial differential equation is compuataionally expensive, requiring an expansion of the grid used. In order to solve for the growth at each time step on a 100 x 100 grid, one must solve for the dot product of a 10,000x10,000 matrix and a 10,000 element vector (or another square matrix). Obviously, this $O(N^2)$ scaling is inefficient but luckily matrix operations are easily parallelizable in theory. 
+
 
 
 # Previous Work
@@ -184,17 +186,31 @@ The Go implementation continues when a row is empty, not when a row is 0. Thus, 
 
 # Roadblocks
 
+
+
 While we attempted to implement the proposed architecture without changes, some changes were necessary given the constraints of the technologies we were using.
+
+## Multiprocressing
+One of the first problems we faced in the entire project was realizing that the easy implementation of the code we had in python would need to be converted to to C in order to properly speed up and make use of the design principles from the course. The implementation of a simply python multiprocessing version of the script made this clear as most of the python code used wrapper functions for latent C code or was interdependent and thus made a parallelized version of the code impossible without a lower-level implementation. 
 
 ## PyCuda
 
 As mentioned before, the runtime of a dot product is fairly short (<10000$ \mu s$ ono 1500 x 1500 grid). Thus, any attempt to parallelize will have to ensure that the communication overhead is not too significant. Communication overheads are greater in shared memory architetures than non-shared memory architectures. Thus, multi-threading introduces less overhead than multi-processing. 
 
-When PyCuda is invoked, it must copy over the data to the GPU before the operation can be executed. This means a significant overhead is introduced. In order to test this, the transfer times of various grid sizes were tested on an AWS g3 instance (see appendix for specifications). These results are tabulated below:
+When PyCuda is invoked, it must copy over the data to the GPU before the operation can be executed. This means a significant overhead is introduced. In order to test this, the transfer times of various grid sizes were tested on an AWS g3 instance (see appendix for specifications). These results are tabulated below for a .04% non-zero elements matrix:
 
-(INSERT TIMES)
+| Grid Size (n x n) | Time ($\mu s$) | % of Matrix-Vector Dot |
+|-------------------|----------------|------------------------|
+| 64                | 265238         | 2,947                  |
+| 150               | 1576900        | 17,521                 |
+| 300               | 19009656       | 211,218                |
+
+
+![transfer](figures/transfer.png)
+
 
 As can be seen above, the transfer time far outweighs the time of an operation, resulting in a slowdown for the operation.Thus, PyCuda was abandoned as a possible implementation.
+
 
 ## Latency
 
@@ -207,9 +223,17 @@ Similar to above, multi-node architectures had to be abandoned due to latency re
 ## Memory Error
 
 After approximately 13 hours of real time and approxiamtely 375 hours of compute time on a GCE instance (see appendix), the run failed to generate a 1400x1400 simulation because of memory issues. In order to generate the movie, the array of grids is copied for rendering. This means the (INSERT SIZE) array essentially doubles, resulting in far more memory being used than we expected. As such, we requested an increased memory of 600GB total. In order to prevent the need to rerun in the event of a failed render, we also write the array to disk before rendering. This meant we had to request a total of (INSERT SIZE) in disk size as well.
+
 # OpenMP + MPI
 
+An MPI hybrid implementation was 
+  
+
+
+
 ## Results
+
+#OpenMP + MPI
 
 # Golang (gourouteines + gRPC)
 
