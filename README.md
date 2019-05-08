@@ -15,3 +15,4 @@ python3 lightning.py
 
 ### Go: multi-node
 The implementation can be found on the `grpc-buffer` branch.
+`git checkout grpc-buffer`
