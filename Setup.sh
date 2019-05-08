@@ -10,4 +10,4 @@ sudo apt-get install nfs-kernel-server
 
 export MPICH_PORT_RANGE=10000:10100
 export MPIR_CVAR_CH3_PORT_RANGE=10000:10100
-export LM_LICENSE_FILE=$LM_LICENSE_FILE:/opt/pgi/license.dat;
+
