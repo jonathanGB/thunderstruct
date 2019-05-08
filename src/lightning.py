@@ -1,9 +1,9 @@
 from gen_arc import gen_arc, boundary2, pcg, datdot
-from visualization import movie
+# from visualization import movie
 import numpy as np
 from time import time
 
-b = boundary2((700, 700))
+b = boundary2((64, 64))
 print("b: {}".format(b.shape))
 
 now = time()
@@ -16,4 +16,4 @@ print("pcg @: {}s ({}%)\npcg.dot: {}s ({}%)\npcg.get_z: {}s ({}%)\n-------------
 #print(np.array(datdot.res2times).mean())
 
 print("Dot vec time: {}s ({}%) - {} times\nDot mat time: {}s ({}%) - {} times".format(datdot.vectime, datdot.vectime/total*100, datdot.veccount, datdot.mattime, datdot.mattime/total*100, datdot.matcount))
-movie(np.sqrt(abs(Phis_vis_dbm)), iskwargs={'cmap': 'Blues'}, interval=5)
+# movie(np.sqrt(abs(Phis_vis_dbm)), iskwargs={'cmap': 'Blues'}, interval=5)

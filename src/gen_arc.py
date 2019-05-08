@@ -3,22 +3,47 @@ from scipy import sparse
 from functools import reduce
 from scipy.ndimage import binary_dilation
 from scipy.sparse import linalg
-from sksparse.cholmod import cholesky
+from sksparse.cholmod import cholesk
 from time import time
-from go_parallelizer import GoParallelizer
 
-gp = GoParallelizer()
+import pycuda.autoinit
+import pycuda.driver as drv
+import pycuda.gpuarray as gpuarray
+from pycuda.sparse.packeted import PacketedSpMV
+from pycuda.tools import DeviceMemoryPool
+
+
+def spmv_cuda(a_sparse, b):
+
+    dtype = a_sparse.dtype
+    m = a_sparse.shape[0]
+
+    spmv = PacketedSpMV(a_sparse, is_symmetric=False, dtype=dtype)
+
+    dev_pool = DeviceMemoryPool()
+    d_b = gpuarray.to_gpu(b, dev_pool.allocate)
+    d_c = gpuarray.zeros(m, dtype=dtype, allocator=d_b.allocator)
+
+    d_c.fill(0)
+    d_c = spmv(d_b, d_c)
+    dev_pool.stop_holding()
+
+
+    return d_c.get()
+
+
 def datdot(A, B):
     now = time()
 
+
     if len(B.shape) == 1:
         datdot.veccount += 1
+        now = time()
+        res = spmv_cuda(A, B)
         #now1 = time()
         #res2 = A.dot(B)
         #datdot.restimes.append(time() - now1)
         #now1 = time()
-        res = gp.dot(A, B)
-        #datdot.res2times.append(time() - now1)
         datdot.vectime += time() - now
         #if not np.array_equal(res, res):
         #    print("errrrrr: gp vs np")
@@ -32,10 +57,11 @@ def datdot(A, B):
             print("Mean of dot prod for go-parallel: %fμs" % (datdot.vectime/datdot.veccount*1000000))
         return res
     else:
+
         datdot.matcount += 1
         res = A.dot(B)
         datdot.mattime += time() - now
-        return A.dot(B)
+        return res
     return res
 
 datdot.mattime = 0
@@ -51,7 +77,7 @@ def gen_arc(b, leader=None, eta=2, also=False, max_n=1000, h=1, mg=False, method
     b = b.copy()
     f = np.zeros_like(b.flatten()) if leader is None else h ** 2 * leader.flatten()
     L = lapl(b.shape)
-    
+
     # Solve with mutligred or solve lapl
     if mg:
         mg_args = {'scale': 4, 'method': method, **mg_args}
@@ -62,18 +88,18 @@ def gen_arc(b, leader=None, eta=2, also=False, max_n=1000, h=1, mg=False, method
         solve = lambda B, U: multigrid(B, f, U, n=2, mg_arrays=mg_arrays)[0]
     else:
         solve = lambda B, U: solve_lapl(B, f, L, x0=U, method=method)
-        
+
     Phis, _, bs = [], [], [b]
     Phi2s = []
     # Stop after max_n iterations
     for _ in range(max_n):
         b = bs[-1].copy()
-        
+
         # Solve for potential with laplacian pde
         prev = Phis[-1].flatten() if Phis else None
         Phi = solve(b, prev).reshape(b.shape)
         Phi = np.where(~np.isnan(b), b, Phi) # reapply boundary conditions
-        
+
         # Append richardson error for adaptive mesh
         # Ts.append(richardson(Phi, L.dot(L) - lapl(b.shape, mul=2)))
         if also:
@@ -82,14 +108,14 @@ def gen_arc(b, leader=None, eta=2, also=False, max_n=1000, h=1, mg=False, method
             Phi2 = solve(b2, Phi2s[-1].flatten() if Phi2s else None).reshape(b.shape)
             Phi2 = np.where(~np.isnan(b2), b2, Phi2)
             Phi2s.append(Phi2)
-        
+
         # Randomly select growth point and add to boundary
         growth = add_point(Phi, eta, force_pos=True)
         if b[growth] == 1:
             break # End if we've reached the ground
         b[growth] = 0
         bs.append(b)
-        
+
         # Re apply boundary conditions
         Phis.append(np.where(~np.isnan(b), b, Phi))
     return np.array(Phis, dtype=float), np.array(Phi2s, dtype=float) if also else None
@@ -99,41 +125,41 @@ def get_mg_arrays(bound_shape, levels=3, v_up=2, v_down=0, scale=4, method='ipcg
     shapes = [bound_shape] + [tuple(np.array(bound_shape) // scale ** i + 1) for i in range(1, levels)]
     Rs = [restrict(shapes[i], shapes[i + 1]) for i in range(levels - 1)]
     Ts = [interp(shapes[i], shapes[i + 1]) for i in range(levels - 1)]
-            
+
     # Traditional method, incompatible with conjugate gradient because not SPD
     # Ai = Rs[i-1].dot(As[-1]).dot(Ts[i - 1])
     # Instead just use laplacian of the proper shape
     As = [lapl(i) for i in shapes]
-    
+
     # One full cycle of multigrid recursive algorithm using gauss siedel
     def solve_level(l, f, us, bounds):
         # If on the coarsest level solve by method
         if l == levels - 1:
             sol = solve_lapl(bounds[l], -f, As[l], x0=us[l], method=method).flatten()
             return [sol]
-        
+
         # Smooth v_down times before restricting to coarser level
         sol = gauss_siedel(bounds[l], us[l], As[l], n=v_down).flatten()
-        
+
         # Reapply boundary conditions
         sol = np.where(np.isnan(bounds[l].flatten()), sol, bounds[l].flatten())
-        
+
         # Restrict solution to coarser level
         r = datdot(Rs[l], f - datdot(As[l], sol))
-        
+
         # solve on coarser level
         sols = solve_level(l + 1, r, us, bounds)
-        
+
         # Interpolate coarse solution to current level and normalize
         sol += datdot(Ts[l], sols[0])
         sol /= np.max(sol)
-        
+
         # Smooth v_up times with new solution
         sol = gauss_siedel(bounds[l], sol, As[l], n=v_up).flatten()
-        
+
         # return all solutions (to be used as initial guesses with multiple v-cycles)
         return [sol] + sols
-    
+
     return (shapes, Rs, solve_level)
 
 # Generate sparse matrix for arbitrary-dimensional finite-difference laplacian
@@ -142,10 +168,10 @@ def get_mg_arrays(bound_shape, levels=3, v_up=2, v_down=0, scale=4, method='ipcg
 def lapl(shape, mul=1, h=1):
     diags = [1, -2, 1] # Values on diagonals for 1d laplacian
     ks = [mul, 0, -mul] # which diagonals to set for above values
-    
+
     # Store 1d laplacians T_j in array Ts
     Ts = [sparse.diags(diags, ks, shape=(j, j), format='csr') for j in shape]
-    
+
     # Calculate kronsum (sum of tensor product of T_a, I_b and tensor product of I_a, T_b) of 1d laplacian matrices
     return reduce(lambda a, b: sparse.kronsum(a, b, format='csr'), Ts[::-1]) / h
 
@@ -154,23 +180,23 @@ def multigrid(bound, f, u, mg_arrays=None, n=3, **kwargs):
     bounds = [bound]
     shapes, Rs, solve_level = mg_arrays if mg_arrays else get_mg_arrays(bound.shape, **kwargs)
     levels = len(shapes)
-    
+
     # Apply restriction operator to bound to get bound at every level
     for i in range(1, levels):
         Ri = Rs[i - 1]
         xi = bounds[-1].flatten()
         boundi = np.where(datdot(Ri, np.isnan(xi)) != 1, datdot(Ri, np.nan_to_num(xi)), np.nan)
         bounds.append(boundi.reshape(shapes[i]))
-    
+
     Us = [u]
     for i in range(1, levels):
         Us.append(datdot(Rs[i - 1], Us[-1]) if Us[-1] is not None else None)
-        
+
     # Use recursive solve_level function as above for n v-cycles
     for i in range(n):
         # Use solutions as initial guesses each v-cycle
         Us = solve_level(0, f.flatten(), Us, bounds)
-        
+
     # Return final solution from Us on finest level (Us[0])
     return Us[0], bounds
 
@@ -180,22 +206,22 @@ def solve_lapl(bound, f, L, x0=None, solve_knowns=True, method='iccg'):
     bound_flat = bound.flatten()
     bn = np.nan_to_num(bound_flat)
     f += datdot(L, bn) # Add in influence of known values of L @ x to f
-    
+
     unknown = np.isnan(bound_flat).astype(int)
     known_idx = np.where(1 - unknown)
     solve_idx = np.where(unknown)
     f[known_idx] = bound_flat[known_idx]
-    
+
     # if solve_knowns, keep equations for known variables in system
     if solve_knowns:
         keep_rows = sparse.diags(unknown)
         L = datdot(datdot(keep_rows, L), keep_rows) - sparse.diags(1 - unknown)
         solve_idx = np.indices(bound_flat.shape)
-    
+
     i = solve_idx[0]
     x0 = bn if x0 is None else x0
     bound_flat[i] = solve_poisson(L[i[:, None], i], -f[i], x0=x0[i], method=method)
-    
+
     return bound_flat.reshape(bound.shape)
 
 # Add point to growth frontier of A with probabilities proportional to potential diff
@@ -224,16 +250,16 @@ def gauss_siedel(bound, u, A, f=None, n=500, use_red_black=True):
     if use_red_black:
         # Only compute update at nonboundary
         nnz = np.nonzero(np.isnan(bound)) # nonboundary indices
-        
+
         # determine red or black by parity of sum of indices for each square
         nnz += ([np.sum(a) for a in zip(*nnz)],)
         red_multi = [a[:-1] for a in zip(*nnz) if a[-1] % 2 == 0]
         black_multi = [a[:-1] for a in zip(*nnz) if a[-1] % 2 == 1]
-        
+
         # flatten indices
         red = np.ravel_multi_index(list(zip(*red_multi)), bound.shape)
         black = np.ravel_multi_index(list(zip(*black_multi)), bound.shape)
-        
+
         # alternate red-black for update n times
         for _ in range(n):
             for j in red:
@@ -246,7 +272,7 @@ def gauss_siedel(bound, u, A, f=None, n=500, use_red_black=True):
         for _ in range(n):
             for j in nnz:
                 u[j] += (f[j] - datdot(A[j], u)) / A[j, j]
-    
+
     # ensure boundary values still hold and reshape
     return np.where(np.isnan(bound), u.reshape(bound.shape), bound)
 
@@ -328,7 +354,7 @@ def pcg(x, b, A, get_z, min_err=1e-7):
             pAp = 1e-20
             print("changed pAp")
             #raise Exception('Division by 0 in CG')
-        
+
         alp = zr / pAp
         x += alp * p
         r -= alp * Ap
