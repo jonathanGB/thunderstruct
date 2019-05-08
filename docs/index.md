@@ -143,8 +143,12 @@ During the original implementation of DBM, the choice was made to use sparse mat
 
 On top of that, the bottleneck was not due to the operation taking a long time to complete, but rather the sheer number of calls (see Table 1). On a 100x100 grid, the mat-vec dot product does take 6.19s, but it is called 88,200 times (for an average time of only $69\mu s$); on 250x250 grids, it is called 362,086 times; on 400x400 grids, over 400,000 times, averaging $811\mu s$. In terms of execution time per call, mat-mat products are indeed very slow, especially compared to mat-dot products. However, their relative importance in terms of total execution time is much less important than mat-dot products, due to the simple fact that it is called much less often. From initial profiling, it was clear that our focus had to be on mat-vec products, not on mat-mat products. The problem we faced with optimizing this operation by parallelizing it is its inherent initial cost; on such a short timescale to improve, serialization and communication overheads incurred, to name a few, can rapidly negate any benefits of parallelism.
 
+| Distance    | 0 |  1 |  2 | 3 |  4 |  5 | 6 |
+|-------------|---|--|--|-----|--|--|---|
+| Probability | 0 | .1 | .2 |   .4  | .2 | .1 | 0 |
+
 |                                                 	| 100x100 	| 250x250 	| 300x300 	| 400x400 	|
-|-------------------------------------------------	|-------	|-------	|-------	|-------	|
+|-------------------------------------------------|-------|-------|-------|-------|
 | Total time in mat-vec products (s)              	|   6.19  	|  119.14 	|  199.80 	|  360.79 	|
 | Total time in mat-mat products (s)              	|   1.93  	|  33.05  	|  52.33  	|  108.52 	|
 | Number of mat-vec calls                         	|  88,200 	| 362,086 	| 439,218 	| 444,688 	|
