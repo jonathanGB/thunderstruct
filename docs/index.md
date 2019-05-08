@@ -21,6 +21,7 @@ In the past, lightning simulations  have been forced to choose between two parad
 ## Diffusion Limited Aggregation (DLA)
 
 ![DLAout](figures/DLA.png)
+<center> Fig. 1. DLA-generated lightning </center>
 
 To simulate only the shape, one possible appraoch is diffusion limited aggregation (DLA). In this method, there are five critical steps to understand:
 
@@ -41,16 +42,19 @@ The second criticism of the model can be remedied with tip-biasing, an approach 
 | Distance    | 0 |  1 |  2 | 3 |  4 |  5 | 6 |
 |-------------|---|--|--|-----|--|--|---|
 | Probability | 0 | .1 | .2 |   .4  | .2 | .1 | 0 |
+<center> Fig. 2. Distance-probability distribuion of tip-biased DLA </center>
 
 This also helps remedy the scaling issue as the tip-bias dictates the random walk does not have to walk nearly as far. Thus,  the method helps to remedy the two aforementioned issues with DLA, but still does not take into account physical first-principles. 
 
 <img src="figures/DLAtime.png">
+<center> Fig. 3. DLA times for various grid sizes </center>
 
 
 The above figure is a comparison of runtimes for tip-biased DLA and normal DLA runtimes.
 
 
 <img src="figures/DLAtipout.png">
+<center> Fig. 4. Tip-biased DLA output </center>
 
 
 In the above image, the extreme branching pattern of tip-biased DLA can be seen, far less accurate than other methods in terms of shape, but still not as inaccurate as normal DLA.
@@ -60,6 +64,7 @@ In the above image, the extreme branching pattern of tip-biased DLA can be seen,
 ## Dielectric Breakdown Model
 
 <img src="figures/DMBout.png">
+<center> Fig. 5. DBM-generated lightning </center>
 
 The dielectric breakdown model is a method for simulating lightning with first-principles in mind. The algorthm can be summarized in the following steps:
 
@@ -100,6 +105,7 @@ $\eta$ is a branching hyperparameter. For the purposes of this report, it is not
 However, as with DLA, this method scales poorly with problem size as the linear equation solution gets more and more complicated.
 
 <img src="figures/DBMtime.png">
+<center> Fig. 6. DLA-generated lightning </center>
 
 
 # Model Origins
@@ -124,13 +130,16 @@ Initial profiling of the code revealed a massive bottleneck in the dot product u
 During the original implementation of DBM, the choice was made to use sparse matrices to drastically increase the speed of matrix operations, and inversely to reduce the memory footprint. This accomplished the goal of speeding up operations, but also meant our baseline code was already extremely fast. Moreover, we leveraged the numpy library further speedup the operations. Under the hood, numpy compiles in C++ and parallelizes many basic operations. We realized that while monitoring the CPU usage of the baseline algorithm; it would spike beyond what a single-core algorithm could possibly achieve. Indeed, we could see its usage reaching 300 to 400% while running locally. Later on in the project, we ran the baseline algorithm on a 96-core machine, and using monitoring tools like *top* we measured a CPU usage of 6,938%! Thus, for all intents and purposes, the code was already semi-parallelized.
 
 <img src="figures/numpy_cpu_1400x1400.png">
-<center> *Fig. X. CPU usage while running baseline algorithm on 96-core machine* </center>
+<center> Fig. 7. CPU usage while running baseline algorithm on 96-core machine </center>
 
 <img src="figures/gridpercents.png">
+<center> Fig. 8. Grid-size vs percent of total time for matrix-vector dot product </center>
 
 <img src="figures/matdot.png">
+<center> Fig. 9. Average time in matrix-vector dot product for various grid sizes </center>
 
 <img src="figures/matmat.png">
+<center> Fig. 10. Average time in matrix-matrix dot product for various grid sizes </center>
 
 On top of that, the bottleneck was not due to the operation taking a long time to complete, but rather the sheer number of calls (see Table 1). On a 100x100 grid, the mat-vec dot product does take 6.19s, but it is called 88,200 times (for an average time of only $69\mu s$); on 250x250 grids, it is called 362,086 times; on 400x400 grids, over 400,000 times, averaging $811\mu s$. In terms of execution time per call, mat-mat products are indeed very slow, especially compared to mat-dot products. However, their relative importance in terms of total execution time is much less important than mat-dot products, due to the simple fact that it is called much less often. From initial profiling, it was clear that our focus had to be on mat-vec products, not on mat-mat products. The problem we faced with optimizing this operation by parallelizing it is its inherent initial cost; on such a short timescale to improve, serialization and communication overheads incurred, to name a few, can rapidly negate any benefits of parallelism.
 
@@ -145,9 +154,9 @@ On top of that, the bottleneck was not due to the operation taking a long time t
 | Overall execution time (s)                      	|  13.08  	|  250.80 	|  401.84 	|  794.75 	|
 | Proportion of overall time in mat-vec calls (%) 	|   44.5  	|   47.5  	|   49.7  	|   45.4  	|
 | Proportion of overall time in mat-mat calls (%) 	|   14.0  	|   13.2  	|   13.0  	|   13.6  	|
-<center>*Table 1. Execution times of mat-vec & mat-mat products over various grid sizes.*</center>
+<center>Fig. 11. Execution times of mat-vec & mat-mat products over various grid sizes.</center>
 
-Even though these findings showed that it would be difficult to beat the current mat-dot implementation, there was one promising outcome: its execution time was growing quadratically. Even with a inherent parallelization starting cost, there was hope that at a certain threshold, we could get better execution time than numpy. By extrapolating the curve at Fig. X, we estimated that a mat-vec product in a 1500x1500 grid would take around $11,018 \mu s$ per call. Obviously, extrapolation is not proof in any way, but it confirmed that improvement by parallelizing was not far fetched, especially for bigger grids.
+Even though these findings showed that it would be difficult to beat the current mat-dot implementation, there was one promising outcome: its execution time was growing quadratically. Even with a inherent parallelization starting cost, there was hope that at a certain threshold, we could get better execution time than numpy. By extrapolating the curve at Fig. 9, we estimated that a mat-vec product in a 1500x1500 grid would take around $11,018 \mu s$ per call. Obviously, extrapolation is not proof in any way, but it confirmed that improvement by parallelizing was not far fetched, especially for bigger grids.
 
 # Implementations
 
@@ -174,7 +183,7 @@ On the other hand, having never used ctypes in the past, we could feel that it w
 |----------------|--------------------|
 | Subprocess     | 4705               |
 | Shared Library | 850                |
-<center> *Table 2. Execution time of subprocess vs shared library* </center>
+<center> *Figure 12. Execution time of subprocess vs shared library* </center>
 
 Beyond simply being approximately 5-8x faster than a subprocess on average, we also noticed that shared library get a substantial speedup after the first call:
 
@@ -182,7 +191,7 @@ Beyond simply being approximately 5-8x faster than a subprocess on average, we a
 |--------|--------------------|
 | First Call  | 1270               |
 | Second Call | 72                 |
-<center> *Table 3. Execution time of subsequent shared library calls* </center>
+<center> *Figure 13. Execution time of subsequent shared library calls* </center>
 
 We are not totally sure why that is the case, but we hypothesize that, just like serverless functions, there must be a big time difference between cold and warm starts. Overall, even though the extra programming complexity of using a shared library, the gain in performance could not be ignored, hence we decided to use ctypes for the go, gRPC, OMP, and hybrid implementations.
 
@@ -195,14 +204,14 @@ We quickly discovered that the matrices we were working with were extremely spar
 |--------|---------------------|
 | Matrix | 0.004                 |
 | Vector | 95                  |
-<center> *Table 4. Approximate proportion of non-zero elements by structure in 250x250 grid* </center>
+<center> *Figure 14. Approximate proportion of non-zero elements by structure in 250x250 grid* </center>
 
-This discovery makes sense with the given model as the matrices largely store information on the electric charge and the state of very narrow lightning leads over comparatively massive state spaces, these matrices also became more sparse as the size of the grid increased, further supporting this intuition. This meant that even though we had large matrices, we could encode them into much smaller arrays. There are many ways to encode compressed matrices: some common schemes are Compressed Sparse Row (CSR), Compressed Sparse Column (CSC), and COOrdinate list (COO). It turns out that for mat-vec products, the encoding used was always a matrix $A$ in CSR format and a vector $B$ as a simple numpy array --- as the latter is orders more dense. Choosing CSR makes sense for this dot product; recall that this operation multiplies and adds elements of row $i$ of the matrix with the vector, stores the result, then repeat with row $i+1$, and so on. The traversal of the elements of A follows a *row-major order* pattern (see Fig. X), which is what CSR encodes into.
+This discovery makes sense with the given model as the matrices largely store information on the electric charge and the state of very narrow lightning leads over comparatively massive state spaces, these matrices also became more sparse as the size of the grid increased, further supporting this intuition. This meant that even though we had large matrices, we could encode them into much smaller arrays. There are many ways to encode compressed matrices: some common schemes are Compressed Sparse Row (CSR), Compressed Sparse Column (CSC), and COOrdinate list (COO). It turns out that for mat-vec products, the encoding used was always a matrix $A$ in CSR format and a vector $B$ as a simple numpy array --- as the latter is orders more dense. Choosing CSR makes sense for this dot product; recall that this operation multiplies and adds elements of row $i$ of the matrix with the vector, stores the result, then repeat with row $i+1$, and so on. The traversal of the elements of A follows a *row-major order* pattern (see Fig. 15), which is what CSR encodes into.
 
 CSR works by encoding a matrix $A$ with $NNZ$ non-zero elements and $m$ rows into three arrays --- called *data*, *indices*, and *indptr* in scipy jargon. The first array (*data*), of size $NNZ$, contains all the non-zero elements of $A$ in row-major order. The second array (*indices*), of size $NNZ$ as well, contains the column index for each corresponding data element; that is, if the $i$th element of the data array is positioned in the $j$th column in the underlying matrix, then the $i$th value of the *indices* array will store $j$. The third array (*indptr*), of size $m+1$, aims at storing how many non-zero elements are present in previous rows --- which is a little bit more tricky to understand. The $i+1$th element of *indptr* stores how many non-zero elements there are in $A$ in rows $0$ to $i$. For this recursive definition to work, we must set the $0$th value of *indptr* to 0. Using these three arrays together makes it possible to encode a $m\times n$ matrix using $2 NNZ + m + 1$ elements; if $NNZ$ is small, that is a big gain in terms of space! For instance, a $250^2\times 250^2$ matrix with a 0.004% sparsity would be encoded using $375,001$ elements rather than $3,906,250,000$. As well, because we are doing a dot product, the fact that $A$ is encoded in row-major order makes it possible to do the whole operation in $O(m + NNZ)$ time, rather than $O(m \times n)$ time; thus we save space and time by ignoring all these zeros, and we took advantage of these properties when implementing mat-vec dot products in both implementations!
 
 <img src="figures/row-order-major.png">
-<center> Fig. X. Row-Major Order vs Column-Major Order </center>
+<center> Fig. 15. Row-Major Order vs Column-Major Order </center>
 
 ## Go - Matrix-Vector Product on a single-node
 You must first walk before you can run, and so we started with a single-node implementation with Go rather than go head on into distributed work on a cluster. We decided to use Go as an alternative *advanced* path because it is a programming language that is intrinsically concurrent. While other languages need to import libraries to implement multithreading or multiprocessing, Go has its own native construct baked in the language: they are called goroutines. To spawn a goroutine, one simply needs to invoke a function, but prefixing the call with the keyword `go` (see following snippet).
@@ -220,17 +229,17 @@ Goroutines are not only simple to call, but their footprint is minimal: contrari
 
 The initial implementation of the mat-vec dot product was the following: the main thread would loop through all the rows of matrix $A$, and everytime a row contained at least one non-zero element, it would spawn a goroutine to solve that row. Notice that looking whether a row contains non-zero elements in a CSR encoded matrix is $O(1)$. So, if there were $x$ non-empty rows, then $x$ goroutines would be spawned. This is perfectly fine for go to launch that many goroutines, but it turned out that this approach was really slow. We realized that having the main thread loop through all the rows was a bottleneck: the rows, if not empty, contained on average just a few elements, and so were already really fast to solve. Indeed, we measured the number of non-zero elements per non-empty rows in a $1920 \times 1080$ grid, and they would contain usually less than five elements.
 
-Therefore, we shifted to a new approach: partitioning the rows of the matrix. In a matrix of $m$ rows running on a machine with $k$ logical cores, we would dispatch $k$ goroutines; the first one would have to take care of the first $\frac{m}{k}$ rows, the second goroutine the next $\frac{m}{k}$ rows, and so on. The edge case of doing that was that the last goroutine would not have necessarily $\frac{m}{k}$ rows, but rather the rest of the rows. While the first iteration had a theoretical time of $O(m)$, the new one was $O(\frac{m}{k})$ time --- in both cases, we consider the number of non-zero elements per row to be negligible, hence constant. This latter approach showed promising results: on a 500x500 grid running on a 96-core machine, the baseline algorithm took 65 minutes; the said parallelized implementation took 53 minutes, which was a 1.23 speedup in total execution time! We also measured the average time it took to compute a single mat-vec dot product in a 1400x1400 grid on the same machine, and we got an impressive speedup of around 5.7 (see Fig. X); while the baseline took on average $18,000 \mu s$, the parallelized implementation took around $3,100 \mu s$.
+Therefore, we shifted to a new approach: partitioning the rows of the matrix. In a matrix of $m$ rows running on a machine with $k$ logical cores, we would dispatch $k$ goroutines; the first one would have to take care of the first $\frac{m}{k}$ rows, the second goroutine the next $\frac{m}{k}$ rows, and so on. The edge case of doing that was that the last goroutine would not have necessarily $\frac{m}{k}$ rows, but rather the rest of the rows. While the first iteration had a theoretical time of $O(m)$, the new one was $O(\frac{m}{k})$ time --- in both cases, we consider the number of non-zero elements per row to be negligible, hence constant. This latter approach showed promising results: on a 500x500 grid running on a 96-core machine, the baseline algorithm took 65 minutes; the said parallelized implementation took 53 minutes, which was a 1.23 speedup in total execution time! We also measured the average time it took to compute a single mat-vec dot product in a 1400x1400 grid on the same machine, and we got an impressive speedup of around 5.7 (see Fig. 16); while the baseline took on average $18,000 \mu s$, the parallelized implementation took around $3,100 \mu s$.
 
 <img src="figures/mat-vec-speedup-go.png">
-<center> *Fig. X. Average time to execute mat-vec dot products* </center>
+<center> *Fig. 16. Average time to execute mat-vec dot products* </center>
 
 We also briefly thought about a third iteration: right now, we were dividing the rows in ordered blocks, that is goroutine $1$ had the first block of rows, goroutine $2$ had the block of rows just below, and so on. However, not all blocks are as computationally intensive. Some may have more non-zero elements than the others, and so some goroutines could be idle while the last one was still computing. There could be an improvement made in divididing the blocks more equally in terms of workload, as the algorithm is as fast as its slowest member. A heuristic would have been to divide the rows in stripes: goroutine $1$ has the rows `i % 1 == 0`, goroutine $2$ has the rows `i % 2 == 0`, and so on. Due to lack of time, this has not been implemented, and would be part of future work.
 
 
 ## Go - Parallelizing Vector Addition
 
-From initial profiling, we knew that the `pcg` function was a substantial bottleneck. We improved its performance by parallelizing mat-vec products, but we were curious to know if new bottlenecks would arise --- as `pcg` was still the clear bottleneck of our simulation (see Fig. X).
+From initial profiling, we knew that the `pcg` function was a substantial bottleneck. We improved its performance by parallelizing mat-vec products, but we were curious to know if new bottlenecks would arise --- as `pcg` was still the clear bottleneck of our simulation. 
 
 <img src="figures/pcg_bottleneck.png">
 
@@ -251,7 +260,7 @@ This was a massive speedup for a trivial solution. Rather than take 65% of the t
 
 ## Go - `Empty` vs `Zero`
 
-From looking at the previous profiling results (see Fig. X), we realized that the second most expensive call was `{built-in method numpy.zeros}`.  The go implementation was explicitely using `zeros` only once: before calling the go function for the mat-vec product, we initialized an array in Python to hold the results, which go could access and store its results via shared-memory. Numpy `zeros` obviously allocates zeros in a given shape, which probably is $O(m)$ time, assuming an array of length $m$. It came to mind that maybe using numpy `empty` could be more efficient, as the latter does not initialize values, and should therefore technically be $O(1)$ time. To switch to `empty`, however, we had to add one line in the go implementation. When facing an empty row, a goroutine would simply go to the next row via the `continue` keyword. As is, this would mean that empty rows would not result in a $0$ result, but rather in the value that happened to be stored at that memory address at that specific time; hence, the small fix required was to have the goroutine set the value of that result to $0$ before moving on. The intuition was that the values would be set to 0 implicitely in the Go code for no real extra cost, while reducing the initializing cost to the bare minimum, that is the time needed for the OS to allocate memory to Python.
+From looking at the previous profiling results, we realized that the second most expensive call was `{built-in method numpy.zeros}`.  The go implementation was explicitely using `zeros` only once: before calling the go function for the mat-vec product, we initialized an array in Python to hold the results, which go could access and store its results via shared-memory. Numpy `zeros` obviously allocates zeros in a given shape, which probably is $O(m)$ time, assuming an array of length $m$. It came to mind that maybe using numpy `empty` could be more efficient, as the latter does not initialize values, and should therefore technically be $O(1)$ time. To switch to `empty`, however, we had to add one line in the go implementation. When facing an empty row, a goroutine would simply go to the next row via the `continue` keyword. As is, this would mean that empty rows would not result in a $0$ result, but rather in the value that happened to be stored at that memory address at that specific time; hence, the small fix required was to have the goroutine set the value of that result to $0$ before moving on. The intuition was that the values would be set to 0 implicitely in the Go code for no real extra cost, while reducing the initializing cost to the bare minimum, that is the time needed for the OS to allocate memory to Python.
 
 This optimization was not only theoretical, fortunately: it yielded a 30% speedup of the average mat-vec dot product execution time on our local machine with a 1500x1500 grid:
 
@@ -259,6 +268,7 @@ This optimization was not only theoretical, fortunately: it yielded a 30% speedu
 |-------|----------------|
 | Zeros | 13260          |
 | Empty | 9285           |
+<center> Fig. 17. Np.zeros vs np.empty execution times </center>
 
 
 ## Go - Distribute workload over the cluster using gRPC
@@ -344,6 +354,7 @@ Of note is the fact that versus a normal MPI implementation this requires a MPI_
 The arguement fopenmp was necessary to specify omp and the mpicc compiler was needed to compile MPI code. In addition the -shared flag and .so extension wasn necessary for the shared library. In addition, for all of the nodes they need to shared keys and ssh with not just the master node but with each other as per the guide. This implementation was tested on both google cloud and EC2. Results spanning several number of nodes and number of processes and summerized below. Note the y-axis time is in microseconds.  
  
  <img src="figures/mpi.png">
+ <center> Fig. 18. OpenMP execution times vs thread count </center>
 
 Note that the performance did increase with the number of nodes but seems to reach a maximum in performance quickly, these operations also also for 100-by-100 square grids. This speed up may not be the case for larger-sized grids where the sequential process of data transfer is a bottleneck as was the case with gRPC. 
   
@@ -367,6 +378,7 @@ The difference in performance between python and lower-level implementations als
 |-------------------|----------------|
 |Numpy| 0.000551|
 |Non-Parallel C|0.002231|
+<center> Fig. 19. Dot-prodcut vector length </center>
 
 ## PyCuda
 
@@ -377,8 +389,10 @@ As mentioned before, the runtime of a dot product is fairly short (<10000$ \mu s
 | 64                | 401677         | 4463                  |
 | 150               | 425736        | 4730                 |
 | 300               | 3107930       | 34533                |
+<center> Fig. 20. PyCuda Transfer times </center>
 
 <img src="figures/transfer.png">
+<center> Fig. 21. PyCuda Transfer times </center>
 
 
 
@@ -392,6 +406,7 @@ Similar to above, multi-node architectures had to be abandoned due to latency re
 |      | Time ($\mu s$) | % of Matrix-Vector Dot |
 |------|----------------|------------------------|
 | gRPC | 2184293        | 24,269                 |
+<center> Fig. 21. gRPC Dot product execution time </center>
 
 ## Memory Error
 
