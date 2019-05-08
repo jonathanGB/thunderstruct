@@ -14,7 +14,7 @@ In order to accurately simulate lightning based on first-principles, the Dielect
 
 # Previous Work
 
-Lightning is a form of electric discharge and grows in a fractal pattern. This occurs when there is a a large enough chage between two objects. In many cases, and in the case of our simulations, this is the difference in a cloud of electrons and the ground. It begins with an initial negative charge distribution, the initial breakdown and then expands to another point, creating another breakdown. This extension from the initial breakdown to the point with the largest difference is known as the stepped leader. The entire process is quick; it only takes around 35ms (CITE). However, the process rapidly iterates with the negative charges of the first stepped leader laying the groundwork for subsequent bolts. Each bolt follows in the path of . the previous, albeit much faster (1-2ms) given the bias of the first stepped-leader. Moreover,  given the fractal pattern lightning ultimately achieves, it is classified as Laplacian growth. This is critical to much early work as Laplacian growth is a well understood concept and many approaches can yield accurate shapes. These two features of lightning, stepped leader behavior and laplacian growth, are the two primary targets of previous work in the area. 
+Lightning is a form of electric discharge and grows in a fractal pattern. This occurs when there is a a large enough large enough potential difference between two objects. In many cases, and in the case of our simulations, this is the difference in a cloud of electrons and the ground. It begins with an initial negative charge distribution, the initial breakdown and then expands to another point, creating another breakdown. This extension from the initial breakdown to the point with the largest difference is known as the stepped leader. The entire process is quick; it only takes around 35ms (). However, the process rapidly iterates with the negative charges of the first stepped leader laying the groundwork for subsequent bolts. Each bolt follows in the path of . the previous, albeit much faster (1-2ms) given the bias of the first stepped-leader. Moreover,  given the fractal pattern lightning ultimately achieves, it is classified as Laplacian growth. This is critical to much early work as Laplacian growth is a well understood concept and many approaches can yield accurate shapes. These two features of lightning, stepped leader behavior and laplacian growth, are the two primary targets of previous work in the area. 
 
 In the past, lightning simulations  have been forced to choose between two paradigms: accurate models or efficient models. In accurate modeling, first-principles are used in order to more-accurately depict the growth of a lightning ray. However,  as mentioned above, this typically result in computationally slow models. On the other hand, lightning growth can be simulated for human observation simply by approximating the shape. These models are appealing to look at, and can grow quite large, but often lack any form of phyciscal principle: they are just fast and generate results that resemble lightning. 
 
@@ -90,7 +90,8 @@ We can use numerous techniques to solve this, but in the current implementation,
 ![pseudocodeipcg](figures/ipcg.png)
 
 
-The intircaes (<--- WAT?) of the above approach are not critical to understand in the context of this paper. Essentially, the above method and the Poisson preconditioner allow for only a single matrix muliplication operation is needed at a given iteration of the conjugate gradient. The preconditioner ensures convergence and thus accelerates the simulation of lightning. 
+The intricacies of the above approach are not critical to understand in the context of this paper. Essentially, the above method and the Poisson preconditioner allow for only a single matrix muliplication operation is needed at a given iteration of the conjugate gradient. The preconditioner ensures convergence and thus accelerates the simulation of lightning. 
+The intricacies (<--- WAT?) of the above approach are not critical to understand in the context of this paper. Essentially, the above method and the Poisson preconditioner allow for only a single matrix muliplication operation is needed at a given iteration of the conjugate gradient. The preconditioner ensures convergence and thus accelerates the simulation of lightning. 
 
 The probability of a given point being the next point the stepped leader jumps to is directly proportional to its charge:
 
@@ -105,7 +106,7 @@ However, as with DLA, this method scales poorly with problem size as the linear 
 
 # Model Origins
 
-The above methods, tip-biased DLA and DBM with IPCG were both implemented for the final project of AM205. However, these methods proved to be both incredibly memory intensive and computationally slow. Simulting (INSERT DATA HERE). Even with these improvements over the original implementations of the respective algorithms, the problem could still be solved more efficiently. When implemented, High Performance Computing was not considered and all simulations were generated on local machines. As such, selecting these models to apply HPC to was a natural decision.
+The above methods, tip-biased DLA and DBM with IPCG were both implemented for the final project of AM205. However, these methods proved to be both incredibly memory intensive and computationally slow. Simulting square grids larger than 500 points proved difficult without extremely powerful virtual machine instances and many hours of computation.  When implemented, High Performance Computing was not considered and all simulations were generated on local machines. As such, selecting these models to apply HPC to was a logical decision.
 
 However, after some initial analysis, it appeared DBM was a far better candidate for optimization than DLA. The reason for this is simple: DLA is extermely sequential. The two processes, stepped leader growth and random walks, both explicitly rely on previous steps.  The next step of the growth leader cannot be predicted without the last and the process of a random walk implicitly depends on previous steps in the random walk to calculate the next. As such, DLA was discarded.
 
@@ -114,16 +115,18 @@ With DBM, there is still an explicit dependence from step to step, but the proce
 
 # Goal
 
-Rendering visually appealing lightning is the goal and as such we needed to generate lightning on a 1400x1400 grid, which is similar to the resolution of standard HD screens (1920×1080). Ultimately, our we sought to optimize this simulation with HPC through the parallelization of the simulation along the time domain using a multi-thread, multi-node architecture on Google Cloud Engine and Amazon Web Services. Using this approach, we obtained a non-trivial speedup and managed to simulate lightning growth on a 1400x1400 grid. 
+Rendering visually appealing lightning is the goal and as such we needed to generate lightning on a 1400x1400 grid, which is similar to the resolution of standard HD screens (1920×1080). Ultimately, our we sought to optimize this simulation with HPC through the parallelization of the simulation along the time domain using a multi-thread, multi-node architecture on Google Cloud Engine and Amazon Web Services. Using this approach, we obtained a non-trivial speedup with different paradigms and managed to simulate lightning growth on up to a 1400x1400 grid. 
 
 # Profiling
 
-An important first step was profiling. Contrarily to other projects which started from the ground up, our goal was to optimize an existing codebase. Even though our intuition led us to believe that we should for instance first parallelize complex matrix operations like matrix multiplications, it was crucial to profile the existing code to find where layed the bottlenecks. This investigative work was crucial, as it turned out that one operation that we took for granted was in fact monopolizing almost 50% of the total execution time!
+An important first step was profiling. Contrarily to other projects which started from the ground up, our goal was to optimize an existing codebase. Even though our intuition led us to believe that we should first parallelize complex matrix operations like matrix multiplications, it was crucial to profile existing code determine performance bottlenecks. This investigative work was crucial, as it turned out that one operation that we took for granted was in fact monopolizing almost 50% of the total execution time!
 
 Initial profiling of the code revealed a massive bottleneck in the dot product used in the IPCG method. This method accounted for over 40% of the computation time and scaled poorly with grid size. Thus, we sought to optimize this step in particular. However, we quckly ran into a problem with this approach: the operation was already highly optimized.
 
-During the original implementation of DBM, the choice was made to use sparse matrices to drastically increase the speed of matrix operations, and inversely to reduce the memory footprint. This accomplished the goal of speeding up operations, but also meant our baseline code was already extremely fast. Moreover, we leveraged the numpy library further speedup the operations. Under the hood, numpy compiles in C++ and parallelizes many basic operations. We realized that while monitoring the CPU usage of the baseline algorithm; it would spike beyond what a single-core algorithm could achieve. Indeed, we could see its usage reaching 300 to 400%. Thus, for all intents and purposes, the code was already semi-parallelized. 
+During the original implementation of DBM, the choice was made to use sparse matrices to drastically increase the speed of matrix operations, and inversely to reduce the memory footprint. This accomplished the goal of speeding up operations, but also meant our baseline code was already extremely fast. Moreover, we leveraged the numpy library further speedup the operations. Under the hood, numpy compiles in C++ and parallelizes many basic operations. We realized that while monitoring the CPU usage of the baseline algorithm; it would spike beyond what a single-core algorithm could possibly achieve. Indeed, we could see its usage reaching 300 to 400% while running locally. Later on in the project, we ran the baseline algorithm on a 96-core machine, and using monitoring tools like *top* we measured a CPU usage of 6,938%! Thus, for all intents and purposes, the code was already semi-parallelized.
 
+![numpy cpu usage](figures/numpy_cpu_1400x1400.png)
+<center> *Fig. X. CPU usage while running baseline algorithm on 96-core machine* </center>
 ![percent](figures/gridpercents.png)
 ![matvec](figures/matdot.png)
 ![matmat](figures/matmat.png)
@@ -145,7 +148,7 @@ On top of that, the bottleneck was not due to the operation taking a long time t
 
 Even though these findings showed that it would be difficult to beat the current mat-dot implementation, there was one promising outcome: its execution time was growing quadratically. Even with a inherent parallelization starting cost, there was hope that at a certain threshold, we could get better execution time than numpy. By extrapolating the curve at Fig. X, we estimated that a mat-vec product in a 1500x1500 grid would take around $11,018 \mu s$ per call. Obviously, extrapolation is not proof in any way, but it confirmed that improvement by parallelizing was not far fetched, especially for bigger grids.
 
-<center> ![mat-dot](https://raw.githubusercontent.com/jonathanGB/CS205-project/master/docs/figures/matdot.png?token=ACDVOHGLQJBEB5FRWKWVUJS43IHK4 =600x400) </center>
+<center> ![mat-dot](figures/matdot.png =600x400) </center>
 
 # Implementations
 
@@ -153,7 +156,7 @@ In order to do this, we leveraged both thread-level parallelism with OpenMP and 
 
 # Chronology
 
-As we continued to implement our planned architecture, some key discoveries allowed us to further enhance the performance of the model. 
+As we continued to implement our planned architecture, some key discoveries allowed us to further enhance the performance of the model as we implemented the model. Most of these lessons were ported from one implementation to the other most notable sparse matrices, shared libraries, empty numpy arrays, and the focus on vector addition operations
 
 ## Shared Libraries vs Subprocess
 
@@ -182,7 +185,7 @@ Beyond simply being approximately 5-8x faster than a subprocess on average, we a
 | Second Call | 72                 |
 <center> *Table 3. Execution time of subsequent shared library calls* </center>
 
-We are not totally sure why that is the case, but we hypothesize that, just like serverless functions, there must be a big time difference between cold and warm starts. Overall, even though the extra programming complexity of using a shared library, the gain in performance could not be ignored, hence we decided to use ctypes.
+We are not totally sure why that is the case, but we hypothesize that, just like serverless functions, there must be a big time difference between cold and warm starts. Overall, even though the extra programming complexity of using a shared library, the gain in performance could not be ignored, hence we decided to use ctypes for the go, gRPC, OMP, and hybrid implementations.
 
 ## Sparse Matrices
 
@@ -195,55 +198,169 @@ We quickly discovered that the matrices we were working with were extremely spar
 | Vector | 95                  |
 <center> *Table 4. Approximate proportion of non-zero elements by structure in 250x250 grid* </center>
 
-This discovery makes sense with the given model as the matrices largely store information on the electric charge and the state of very narrow lightling leads over comparatively massive state spaces, these matrices also became more sparse as the size of the grid increased, further supporting this intuition. This meant that even though we had large matrices, we could encode them into much smaller arrays. There are many ways to encode compressed matrices: some common schemes are Compressed Sparse Row (CSR), Compressed Sparse Column (CSC), and COOrdinate list (COO). It turns out that for mat-vec products, the encoding used was always a matrix $A$ in CSR format and a vector $B$ as a simple numpy array --- as the latter is very much dense. Choosing CSR makes sense for this dot product; recall that this operation multiplies and adds elements of row $i$ of the matrix with the vector, stores the result, then repeat with row $i+1$, and so on. The traversal of the elements of A follows a *row-major order* pattern (see Fig. X), which is what CSR encodes into.
+This discovery makes sense with the given model as the matrices largely store information on the electric charge and the state of very narrow lightning leads over comparatively massive state spaces, these matrices also became more sparse as the size of the grid increased, further supporting this intuition. This meant that even though we had large matrices, we could encode them into much smaller arrays. There are many ways to encode compressed matrices: some common schemes are Compressed Sparse Row (CSR), Compressed Sparse Column (CSC), and COOrdinate list (COO). It turns out that for mat-vec products, the encoding used was always a matrix $A$ in CSR format and a vector $B$ as a simple numpy array --- as the latter is orders more dense. Choosing CSR makes sense for this dot product; recall that this operation multiplies and adds elements of row $i$ of the matrix with the vector, stores the result, then repeat with row $i+1$, and so on. The traversal of the elements of A follows a *row-major order* pattern (see Fig. X), which is what CSR encodes into.
 
 CSR works by encoding a matrix $A$ with $NNZ$ non-zero elements and $m$ rows into three arrays --- called *data*, *indices*, and *indptr* in scipy jargon. The first array (*data*), of size $NNZ$, contains all the non-zero elements of $A$ in row-major order. The second array (*indices*), of size $NNZ$ as well, contains the column index for each corresponding data element; that is, if the $i$th element of the data array is positioned in the $j$th column in the underlying matrix, then the $i$th value of the *indices* array will store $j$. The third array (*indptr*), of size $m+1$, aims at storing how many non-zero elements are present in previous rows --- which is a little bit more tricky to understand. The $i+1$th element of *indptr* stores how many non-zero elements there are in $A$ in rows $0$ to $i$. For this recursive definition to work, we must set the $0$th value of *indptr* to 0. Using these three arrays together makes it possible to encode a $m\times n$ matrix using $2 NNZ + m + 1$ elements; if $NNZ$ is small, that is a big gain in terms of space! For instance, a $250^2\times 250^2$ matrix with a 0.004% sparsity would be encoded using $375,001$ elements rather than $3,906,250,000$. As well, because we are doing a dot product, the fact that $A$ is encoded in row-major order makes it possible to do the whole operation in $O(m + NNZ)$ time, rather than $O(m \times n)$ time; thus we save space and time by ignoring all these zeros, and we took advantage of these properties when implementing mat-vec dot products in both implementations!
 
-<center> ![row-major order vs column-major order](https://raw.githubusercontent.com/jonathanGB/CS205-project/master/docs/figures/row-order-major.png?token=ACDVOHEAK2K6MFXDE7AP7CC43JADO =300x300) </center>
+<center> ![row-major order vs column-major order](figures/row-order-major.png =300x300) </center>
 <center> Fig. X. Row-Major Order vs Column-Major Order </center>
 
-## Go Implementation on a single-node
-<todo jgb>
-  how do we parallelize?
-500x500 on 96-core
-data distribution -> intelligent partitioning probably not worth it
+## Go - Matrix-Vector Product on a single-node
+You must first walk before you can run, and so we started with a single-node implementation with Go rather than go head on into distributed work on a cluster. We decided to use Go as an alternative *advanced* path because it is a programming language that is intrinsically concurrent. While other languages need to import libraries to implement multithreading or multiprocessing, Go has its own native construct baked in the language: they are called goroutines. To spawn a goroutine, one simply needs to invoke a function, but prefixing the call with the keyword `go` (see following snippet).
 
-## Vector Addition
+```go
+procs := runtime.NumCPU()
+for proc := 0; proc < procs; proc++ {
+  go func(procID int) { // goroutine spawned from an anonymous function
+    fmt.Printf("I am goroutine %d", procID)
+  }(proc)
+}
+```
 
-In further profiling, it was discovered that vector addition operations account for a signifcant portion of the runtime of the function pcg in the code. Three lines, addition assignment,  subtraction assignment and addition, all followed by multiplication (i.e. a += b * c) accounted for 65.5% of the runtime of pcg on a 1500x1500 grid. 
+Goroutines are not only simple to call, but their footprint is minimal: contrarily to threads that can cost a few megabytes, a goroutine only requires 4 kilobytes! This [blog post](https://rcoh.me/posts/why-you-can-have-a-million-go-routines-but-only-1000-java-threads/) is an interesting technical dive into the differences between threads and goroutines. Overall, in go, it is very much possible to run concurrently millions of goroutines.
 
-Quickly parallelizing these processes (thread-level with goroutines) yielded a 66% speedup, reducing the runtime of these three lines to only 19% of pcg.
+The initial implementation of the mat-vec dot product was the following: the main thread would loop through all the rows of matrix $A$, and everytime a row contained at least one non-zero element, it would spawn a goroutine to solve that row. Notice that looking whether a row contains non-zero elements in a CSR encoded matrix is $O(1)$. So, if there were $x$ non-empty rows, then $x$ goroutines would be spawned. This is perfectly fine for go to launch that many goroutines, but it turned out that this approach was really slow. We realized that having the main thread loop through all the rows was a bottleneck: the rows, if not empty, contained on average just a few elements, and so were already really fast to solve. Indeed, we measured the number of non-zero elements per non-empty rows in a $1920 \times 1080$ grid, and they would contain usually less than five elements.
 
-This was a massive speedup for a trivial solution. This prompted us to search the code for other quickly parallelizable lines that would yield a boost to performance beyond the dot product. 
+Therefore, we shifted to a new approach: partitioning the rows of the matrix. In a matrix of $m$ rows running on a machine with $k$ logical cores, we would dispatch $k$ goroutines; the first one would have to take care of the first $\frac{m}{k}$ rows, the second goroutine the next $\frac{m}{k}$ rows, and so on. The edge case of doing that was that the last goroutine would not have necessarily $\frac{m}{k}$ rows, but rather the rest of the rows. While the first iteration had a theoretical time of $O(m)$, the new one was $O(\frac{m}{k})$ time --- in both cases, we consider the number of non-zero elements per row to be negligible, hence constant. This latter approach showed promising results: on a 500x500 grid running on a 96-core machine, the baseline algorithm took 65 minutes; the said parallelized implementation took 53 minutes, which was a 1.23 speedup in total execution time! We also measured the average time it took to compute a single mat-vec dot product in a 1400x1400 grid on the same machine, and we got an impressive speedup of around 5.7 (see Fig. X); while the baseline took on average $18,000 \mu s$, the parallelized implementation took around $3,100 \mu s$.
 
-## Empty vs Zero
+![speedup-mat-vec-go](figures/mat-vec-speedup-go.png)
+<center> *Fig. X. Average time to execute mat-vec dot products* </center>
 
-One such line was the use of numpy zeros instead of numpy empty. Numpy zeros obviously allocates zeros in a given shape while numpy empty simply sets the object's shape without populating elements.
+We also briefly thought about a third iteration: right now, we were dividing the rows in ordered blocks, that is goroutine $1$ had the first block of rows, goroutine $2$ had the block of rows just below, and so on. However, not all blocks are as computationally intensive. Some may have more non-zero elements than the others, and so some goroutines could be idle while the last one was still computing. There could be an improvement made in divididing the blocks more equally in terms of workload, as the algorithm is as fast as its slowest member. A heuristic would have been to divide the rows in stripes: goroutine $1$ has the rows `i % 1 == 0`, goroutine $2$ has the rows `i % 2 == 0`, and so on. Due to lack of time, this has not been implemented, and would be part of future work.
 
-The Go implementation continues when a row is empty, not when a row is 0. Thus, by initializing elements as empty instead of 0, the code iterates much faster,  moving on to the rows that actually matter sooner. This yielded a 30% speedup on our local machine with a 1500x1500 grid:
+
+## Go - Parallelizing Vector Addition
+
+From initial profiling, we knew that the `pcg` function was a substantial bottleneck. We improved its performance by parallelizing mat-vec products, but we were curious to know if new bottlenecks would arise --- as `pcg` was still the clear bottleneck of our simulation (see Fig. X).
+
+![pcg_bottleneck](figures/pcg_bottleneck.png)
+
+Using the `line_profiler` library in Python, we were able to notice three lines that were oddly intensive, as they together took 65% of the execution time of pcg in a 1500x1500 grid.
+
+![vector_addition_before](figures/vector_addition_before.png)
+
+These three lines can be expressed as:
+* x = x + alp * p
+* r = r - alp * Ap
+* p = z + beta * p
+
+Python can be deceptive here: these are not scalar additions, but really vector additions. Only `alp` and `beta` are scalars. They all share a same form: we have a vector multiplied by a scalar, which is then added to another vector. We quickly realized that this could easily be parallelized. Just like for mat-vec products, we partitioned both vectors, each partition being handed to a specific goroutine. Theoretically, with vectors of size $m$ and $k$ goroutines (given $k$ logical cores), we could do this operation in $O(\frac{m}{k})$ time. It is not clear if Python is smart enough to do the addition of elements at the same time as the scalar multiplication, so let's not assume that. In the most naïve implementation, the scalar multiplication would happen, then there would be the vector addition, for a theoretical time of $O(2m) = O(m)$. So, a parallelization of this operation could lead to improvements, and indeed, it did (see Fig. X).
+
+![vector_addition_after](figures/vector_addition_after.png)
+
+This was a massive speedup for a trivial solution. Rather than take 65% of the time of `pcg` together, they now represented only 19%, so a 66% improvement! At this point, we were wondering if there were other low-hanging fruits to optimize.
+
+## Go - `Empty` vs `Zero`
+
+From looking at the previous profiling results (see Fig. X), we realized that the second most expensive call was `{built-in method numpy.zeros}`.  The go implementation was explicitely using `zeros` only once: before calling the go function for the mat-vec product, we initialized an array in Python to hold the results, which go could access and store its results via shared-memory. Numpy `zeros` obviously allocates zeros in a given shape, which probably is $O(m)$ time, assuming an array of length $m$. It came to mind that maybe using numpy `empty` could be more efficient, as the latter does not initialize values, and should therefore technically be $O(1)$ time. To switch to `empty`, however, we had to add one line in the go implementation. When facing an empty row, a goroutine would simply go to the next row via the `continue` keyword. As is, this would mean that empty rows would not result in a $0$ result, but rather in the value that happened to be stored at that memory address at that specific time; hence, the small fix required was to have the goroutine set the value of that result to $0$ before moving on. The intuition was that the values would be set to 0 implicitely in the Go code for no real extra cost, while reducing the initializing cost to the bare minimum, that is the time needed for the OS to allocate memory to Python.
+
+This optimization was not only theoretical, fortunately: it yielded a 30% speedup of the average mat-vec dot product execution time on our local machine with a 1500x1500 grid:
 
 |       | Time ($\mu s$) |
 |-------|----------------|
 | Zeros | 13260          |
 | Empty | 9285           |
 
-## Distributed Go Implementation using gRPC
-<todo jgb>
-talk about gRPC, protobufs, process
-bottleneck: serialization + latency
-  result -> abandon (distributed go faster on my laptop then on 8 powerful nodes)
 
+## Go - Distribute workload over the cluster using gRPC
 
-# Roadblocks
+All this work in Go was done on a single node so far. Performance was much improved compared to the baseline, but could it be even better if we could put more machines in parallel to solve mat-vec products? We were skeptic to start with, due to the very small timescale of our problem. Theoretically, yes, putting more machines will solve the problem more quickly, as the time complexity should be $O(\frac{m}{k})$, as stated previously (where $k$ is the number of goroutines). However, because operations for 1500x1500 grids are around $3000 \mu s$, the communication and serialization costs were far from negligible. Nevertheless, we had to see for ourselves.
 
+gRPC is Google's flavour of Remote Procedure Calls (RPC), which is a technique to call methods on other machines and possibly other languages as if they were in the same memory space. Inputs and outputs obviously still need to travel over the network; to do so, gRPC's default behaviour, which was used for this project, was to encode this data using protocol buffers (or protobufs). We could have encoded using JSON or XML for instance, but protobufs are meant to be more efficient memory-wise (as it is stored as binary rather than text). The user needs to define the protobufs structure, and gRPC handles the conversion to and from protobufs to the desired programming language's representation of that data. What follows is the protobuf defined for the mat-vec product.
 
+```proto
+// The service definition.
+service Parallelizer {
+  rpc Dot (DotRequest) returns (DotReply) {}
+}
+
+// The request message.
+message DotRequest {
+  repeated int32 indptr = 1;
+  repeated int32 indices = 2;
+  repeated double data = 3;
+  repeated double vec = 4;
+}
+
+// The response message.
+message DotReply {
+  repeated double result = 1;
+  int32 offset = 2;
+}
+```
+
+So now that we have a mean to call distant methods, we can effectively distribute the workload on multiple machines, just like MPI would. The implementation was the following: we would have one master node, and eight worker nodes. The master node is where the script is running; when we need to compute the mat-vec product, the go code is called. However, rather than dispatch throughout its cores, it partitions the matrix for each of the workers. Each worker receives the submatrix as well as the complete vector --- we can't partition the latter ---, computes the result, and sends it back to the master, which assembles back the eight resulting vectors. The master sends only the partitioned matrix to each worker for efficiency; we could have easily send all the workers the whole matrix and tell them which rows to worry about, but that would have very inefficient in terms of networking usage and in terms of serialization to and from protobufs. Each worker behaves just like the single-node implementation: it further partitions its own submatrix to all its goroutines. With $r$ workers (8 in our case), the theoretical runtime should therefore be $O\left(\frac{m}{r \cdot k}\right)$. However, theory was far from reality in this case.
+
+Indeed, we started by testing the latency between the nodes. To do so, we started two instances in the same subregion, and used `ping <internal_ip>`;  we measured a latency of around $500-900 \mu s$. We then tried to send a simple "hello" message using gRPC, and waited until we got back "world" back, and it took around $3,000 \mu s$, which is close to the time it already takes to do a 1500x1500 dot product on a single node. This last result was very bad: gRPC had a substantial initial cost, even when the serialization from and to protobufs was pretty straight forward (just two simple strings). We still tried our implementation in order to confirm whether our fears were valid or not.
+
+![go-grpc-mat-vec](figures/go-grpc-dot.png)
+
+We tested the implementation on a cluster on AWS with 1 master node and 8 worker nodes: the master was a t2.2xlarge, while the workers were c5.18xlarge instances. The workers are 72-cores rather than 96 on GCP, but have higher clock frequency (base at 3.0GHz and turbo at 3.5GHz, compared to 2.0GHz on GCP). As you can see, for a 1500x1500 grid, the average dot product was taking more than $2,000,000 \mu s$, which is unacceptable for what we need. We compared the results to make sure there was not a bug, but everything was fine; its result was the same as the numpy baseline algorithm.  Hence, we had a functional implementation on a distributed-node setting, but it was abandonned due to its excessive slowness.
+  
+   
+ ## Ctypes implementation in C
+Beyond the go implementation, Ctypes were also used to transfer variables between python and C in the hybrid and OMP implementations. With shared libraries the user must specify variable types and dimensions for the variable being passed to C and also declare the values being returned. In initial implementations of the C code, memory leaks were a massive problem as the variable for the return result matrix could not be freed from memory once the program returned the value to the python function. This is due to the fact that the C function would allocate an array onto the heap and return a pointer to it, which Python would translate to a numpy array; it woud be impossible for the C code to then free it, as the script relied on that data allocation. This was problematic, as it led to memory leaks that terminated the program for matrices beyond 200 square units. From this lesson a return matrix of the correct dimensionality was passed to C and the pointer to this value was simply modified from C before returning nothing to the python code. This method was more stable at larger matrix dimensions. 
+  
+## OMP and Hybrid Implementation
+ The first version implemented in C with OMP functionality simply called a python subprocess to run a C script, which was piped back into the python scrip via stdout. As noted earlier, this was not optimal as subprocess calls are less effecient versus using shared libraries and this advantage only grew as the number of calls to the shared libraries grew. Beyond this the ctypes libraries function poorly when they had to declare, allocate memory for, and return the result array for vector addition calls. This did not allow the execution of matrices beyond 200 square units. Once this was remediated the OMP implementation was a matter of including the desired pragma calls sure as: 
+  
+  ``` pragma parallel for private(i, jh) shared(A, B, ret) schedule(static, chunk)```
+  
+Such that you can specify the chunks that each thread is taking as well a specifying what variables are shared among the threads and which are private to each individual thread. The results from this were psotivie though not groundbreaking:
+  
+![speedup-omp](figures/omp.png)
+  
+Though the performance of the the multithreadied approach is superior to that of the sequential approach the maximal improvement achieved was a modest 1.16x.
+  
+Beyond the simple OMP implementation we aimed to create and hybrid multithread- multinode approach using both OMP and MPI on several compute nodes as well. This was used the MPI approach with the mpi.h included and mpicc compiler. This was achieved principly achieved using MPI_THREAD_INIT commands with testing performed using rank and size to determine the successful instantiation of the commuting jobs on various nodes. A toy script on this hybrid operation is the following: 
+  
+```
+#include <mpi.h>
+#include <omp.h>
+
+int main(int argc, char** argv){
+  
+  MPI_Init_thread(&argc,&argv, MPI_THREAD_MULTIPLE, &provided);
+  int iproc;
+  int nproc;
+  MPI_Comm_rank(MPI_COMM_WORLD,&iproc);
+  MPI_Comm_size(MPI_COMM_WORLD,&nproc);
+  
+  #pragma omp parallel
+  {
+    printf("The rank of the process is currently %d  "\n, iproc );
+    printf("The size of the process is %d",nproc);
+  }
+  MPI_Finalize();
+  return 0;
+} 
+```
+  
+Of note is the fact that versus a normal MPI implementation this requires a MPI_Init_thread rather than an MPI_Init because of the hybrid, multithreading approach. In addition, the arguement MPI_THREAD_MULTIPLE  was also necessary to allow for multithreading within the MPI shcheme. In order to compile this the following command was necessary:
+  
+```
+  mpirun -fPIC -o -shared output.so input.c -fopenmp
+```
+The arguement fopenmp was necessary to specify omp and the mpicc compiler was needed to compile MPI code. In addition the -shared flag and .so extension wasn necessary for the shared library. In addition, for all of the nodes they need to shared keys and ssh with not just the master node but with each other as per the guide. This implementation was tested on both google cloud and EC2. Results spanning several number of nodes and number of processes and summerized below. Note the y-axis time is in microseconds.  
+ 
+![speedup-omp](figures/mpi.png)
+
+Note that the performance did increase with the number of nodes but seems to reach a maximum in performance quickly, these operations also also for 100-by-100 square grids. This speed up may not be the case for larger-sized grids where the sequential process of data transfer is a bottleneck as was the case with gRPC. 
+  
+ ## GCP vs AWS
+
+For all of the implementations both google cloud and AWS were used and the group came to the consensus that Google's service is easier to interface for several reasons. For one, Google's service allowed the user to login using their google account rather than having to store (and potentially delete) a key .pem file. In addition, Google's service allowed for the specific modulation of computing resources (cores, memory, storage, GPUs) in addition to the attachment/detachment of GPUs by simply restarting a VM. With AWS, there was also no clear indicator of how much instances cost, there were also different dashboards for each region which made it possible to leave an instance running on a different region and forget about it. Two of the group members had a good deal of experience with both the services but the remaining member who learned how to run instances on both services found the learning curve on Google cloud to be much shallower. 
+
+  
+ # Roadblocks
 
 While we attempted to implement the proposed architecture without changes, some changes were necessary given the constraints of the technologies we were using.
 
 ## Language 
-One of the first problems we faced in the entire project was realizing that the easy implementation of the code we had in python would need to be converted to C in order to properly speed up and make use of the design principles from the course. The implementation of a simple python multiprocessing version of the script made this clear as most of the python code used wrapper functions for latent C code or was interdependent and thus made a parallelized version of the code impossible without a lower-level implementation. 
+One of the first problems we faced in the entire project was realizing that the easy implementation of the code we had in python would need to be converted to C in order to properly speed up and make use of the design principles from the course. The implementation of a simple python multiprocessing version of the script made this clear as most of the python code used wrapper functions for latent C code or was interdependent and thus made a parallelized version of the code impossible without a lower-level implementation. The performance from multiprocessing is summarized below:
+  
 
-The difference in performance between python and lower-level implementations also resulted in boosts in speed as we saw that simply reimplementing the dot product algorithm in C yielded performance approaching numpy for a 250 x 250 grid.
+The difference in performance between python and lower-level implementations also resulted in boosts in speed as we saw that simply reimplementing the dot product algorithm in C yielded performance approaching numpy for a 250 x 250 grid. 
 
 
 |Implementation| Mean Dot product Length(250 x 250 grid)|
@@ -251,18 +368,17 @@ The difference in performance between python and lower-level implementations als
 |Numpy| 0.000551|
 |Non-Parallel C|0.002231|
 
-
 ## PyCuda
 
-As mentioned before, the runtime of a dot product is fairly short (<10000$ \mu s$ ono 1500 x 1500 grid). Thus, any attempt to parallelize will have to ensure that the communication overhead is not too significant. However, when PyCuda is invoked, it must copy over the data from the main memory to the GPU memory before the operation can be executed. We knew from experience that sending data via the PCIe bus to the GPU was going to be a serious bottleneck. In order to valide our conjecture, the transfer times of various grid sizes were tested on an AWS g3 instance (see appendix for specifications). These results are tabulated below for a .04% non-zero elements matrix:
+As mentioned before, the runtime of a dot product is fairly short (<10000$ \mu s$ on a 1500 x 1500 grid). Thus, any attempt to parallelize will have to ensure that the communication overhead is not too significant. However, when PyCuda is invoked, it must copy over the data from the main memory to the GPU memory before the operation can be executed. We knew from experience that sending data via the PCIe bus to the GPU was going to be a serious bottleneck. In order to valide our conjecture, the transfer times of various grid sizes were tested on an AWS g3 instance (see appendix for specifications). These results are tabulated below for a .004% non-zero elements matrix:
 
 <todo: talk about the amount of data, pcie bandwidth, so on>
 
 | Grid Size (n x n) | Time ($\mu s$) | % of Matrix-Vector Dot |
 |-------------------|----------------|------------------------|
-| 64                | 265238         | 2,947                  |
-| 150               | 1576900        | 17,521                 |
-| 300               | 19009656       | 211,218                |
+| 64                | 401677         | 4463                  |
+| 150               | 425736        | 4730                 |
+| 300               | 3107930       | 34533                |
 
 
 ![transfer](figures/transfer.png)
@@ -281,28 +397,13 @@ Similar to above, multi-node architectures had to be abandoned due to latency re
 
 ## Memory Error
 
-After approximately 13 hours of real time and approxiamtely 375 hours of compute time on a GCE instance (see appendix), the run failed to generate a 1400x1400 simulation over 6,000 time steps because a **MemoryError** was thrown. In order to generate the movie, the array of grids is copied for rendering. This means that what was a 3D array of around 130GB essentially doubles, resulting in far more memory being used than we expected. We had 300GB of RAM at the time, which should have been enough to handle this increase. However, we believe that some other memory from the generation part of the algorithm (before rendering) had not been freed yet. Python being a garbage-collected language, it is much more difficult to free memory. At this point in the process the leaking memory should have been freed (as it was out of the lexical scope), but it seems like it was not yet. As such, we increased the memory to a 600GB total. This was definitely overboard --- the subsequent run showed that the peak reached was near 330GB ---, but the little difference in terms of cost made it feel like a safe bet. If we were to run this again, we could request less memory, as we would be more confident of its reasonable range of usage.
+After approximately 13 hours of real time and approxiamtely 375 hours of compute time on a GCE instance (see appendix), the run failed to generate a 1600x1600 simulation over 6,000 time steps because a **MemoryError** was thrown. In order to generate the movie, the array of grids is copied for rendering. This means that what was a 3D array of around 130GB essentially doubles, resulting in far more memory being used than we expected. We had 300GB of RAM at the time, which should have been enough to handle this increase. However, we believe that some other memory from the generation part of the algorithm (before rendering) had not been freed yet. Python being a garbage-collected language, it is much more difficult to free memory. At this point in the process the leaking memory should have been freed (as it was out of the lexical scope), but it seems like it was not yet. As such, we increased the memory to a 600GB total. This was definitely overboard --- the subsequent run showed that the peak reached was near 330GB ---, but the little difference in terms of cost made it feel like a safe bet. If we were to run this again, we could request less memory, as we would be more confident of its reasonable range of usage.
 
 In order to prevent the need to rerun in the event of a failed render, we also wrote the array to disk before rendering. By default on GCP, compute engines are assigned 10GB of disk storage (can be HDD or SSD, for an extra cost); to satisfy the need to store 130GB to disk, we had to request the corresponding amount of non-volatile storage. To be further certain not to miss storage this time --- as we were not sure how efficient the encoding to disk would be --- we in fact requested 200GB.
 
 ## Node Permissions
-With the multinode implementations the issue of latency was discussed above but also permissions were a large problem with MPI in particular. MPI often threw a ```Permission Denied (Public Key) ``` error which was not a result of not copying over sshkeys from the master to the nodes. It was later discovered that MPI launch structure is a tree implementation where nodes started up MPI threads in other nodes, not the master node. Practically this meant that keys needed to be shared among the nodes and well as the ssh login sessions in order for the nodes to be added to the trusted ip addresses of each other. This problem was not present in the original infrastructure guide as that implementation simply had 2 nodes but we scaled to 4 instances.  
+With the multinode implementations the issue of latency was discussed above but also permissions were a large problem with MPI in particular. MPI often threw a ```Permission Denied (Public Key) ``` error which was not a result of not copying over sshkeys from the master to the nodes. It was later discovered that MPI launch structure is a tree implementation where nodes started up MPI threads in other nodes, not necessarily the master node. Practically this meant that keys needed to be shared among the nodes and well as the ssh login sessions in order for the nodes to be added to the trusted ip addresses of each other. This problem was not present in the original infrastructure guide as that implementation simply had 2 nodes but we scaled to 4 instances.   
   
-
-
-
-## Results
-
-#OpenMP + MPI
-
-# Golang (gourouteines + gRPC)
-
-# GCP vs AWS
-
-For all of the implementations both google cloud and AWS were used and the group came to the consensus that google's service is easier to interface for several reasons. For one, google's service allowed the user to login using their google account rather than having to store(and potentially delete) a key .pem file. In addition, google's service allowed for the specific modulation of computing resources (cores, memory, storage, gpus) in addition to the attachment/detachment of gpus by simply restarting a VM. With AWS there was also no clear indicator of how much instances cost, there were also different dashboards for each region which made it possible to leave an instance running on a different region and forget about it. Two of the group members had a good deal of experience with both the services but the remaining member who learned how to run instances on both services found the learning curve on google cloud to be much shallower. 
-##Results
-
-
 
 ## Future Work
 Future implementions would seek to optimize over 3D grids in particular as scaling for these grids follows as $O(N^6)$ and is still difficult to simulate even with this implementation. In addition it would be interesting to store the charge values of spatial points and how they interact with lightning dispersion as the current algorithm does not store the state space of charge beyond the the lifespan of a single bolt. This would be interesting to determine how bolts interact with each other and how local variations in charge affect the simulation. 
@@ -312,4 +413,13 @@ Future implementions would seek to optimize over 3D grids in particular as scali
 * optimize further would probably require another algorithm?
 * render the frames to the movie as we go, so we do not need as much memory at once; as well, this could end being faster, as there is less stress on memory usage, and rendering would be parallelized
 
-# Appendix
+# Appendix/References
+ 
+[1] V.A. Rakov. Fundamentals of Lightning. Cambridge University Press, 2016.                                                                                      
+[2] L. Niemeyer, L. Pietronero, and H. J. Wiesmann. Fractal dimension of dielectric breakdown. Physical Review Letters, 52(12):1033–1036, mar 1984.                                                                                                                                                                   
+[3] T. Kim, J. Sewall, A. Sud, and M. Lin. Fast simulation of laplacian growth. IEEE Computer Graphics and Applications, 27(2):68–76, mar 2007		
+[4] T. Kim and M. Lin. Fast animation of lightning using an adaptive mesh. IEEE Transactions on Visualization and Computer Graphics, 13(2):390–402, mar 2007.											
+[5] Timothy A. Davis and William W. Hager. Row modifications of a sparse cholesky factorization. SIAM Journal on Matrix Analysis and Applications, 26(3):621–639, jan 2005.									
+[6] J.W. Demmel. Applied Numerical Linear Algebra. Other Titles in Applied Mathematics. Society for Industrial and Applied Mathematics (SIAM, 3600 Market Street, Floor 6, Philadelphia, PA 19104), 1997. 				
+[7] Costas Sideris, Mubbasir Kapadia, and Petros Faloutsos. Parallelized in-complete poisson preconditioner in cloth simulation. In Motion in Games, pages 389–399. Springer Berlin Heidelberg, 201
+
