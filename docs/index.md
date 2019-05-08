@@ -39,9 +39,11 @@ In two dimensions, the walk takes even longer given there are now two axes to wa
 
 The second criticism of the model can be remedied with tip-biasing, an approach developed to specifically model lightning's directionally-biased nature. In tip-biased DLA, the probability of the walker starting from a given point is inversely correlated with its distance from the tip of the stepped leader. It does not force the lightning in one direction, but allows it to grow in that direction with a greater probability. A normal distribution models the probability of starting from a point $n$ spaces from the tip, with the probability maximized at $n = k$. A sample distribution for k =  3 is shown below:
 
+
 | Distance    | 0 |  1 |  2 | 3 |  4 |  5 | 6 |
 |-------------|---|--|--|-----|--|--|---|
 | Probability | 0 | .1 | .2 |   .4  | .2 | .1 | 0 |
+
 <center> Fig. 2. Distance-probability distribuion of tip-biased DLA </center>
 
 This also helps remedy the scaling issue as the tip-bias dictates the random walk does not have to walk nearly as far. Thus,  the method helps to remedy the two aforementioned issues with DLA, but still does not take into account physical first-principles. 
@@ -143,6 +145,7 @@ During the original implementation of DBM, the choice was made to use sparse mat
 
 On top of that, the bottleneck was not due to the operation taking a long time to complete, but rather the sheer number of calls (see Table 1). On a 100x100 grid, the mat-vec dot product does take 6.19s, but it is called 88,200 times (for an average time of only $69\mu s$); on 250x250 grids, it is called 362,086 times; on 400x400 grids, over 400,000 times, averaging $811\mu s$. In terms of execution time per call, mat-mat products are indeed very slow, especially compared to mat-dot products. However, their relative importance in terms of total execution time is much less important than mat-dot products, due to the simple fact that it is called much less often. From initial profiling, it was clear that our focus had to be on mat-vec products, not on mat-mat products. The problem we faced with optimizing this operation by parallelizing it is its inherent initial cost; on such a short timescale to improve, serialization and communication overheads incurred, to name a few, can rapidly negate any benefits of parallelism.
 
+
 |                                                 	| 100x100 	| 250x250 	| 300x300 	| 400x400 	|
 |-------------------------------------------------|-------|-------|-------|-------|
 | Total time in mat-vec products (s)              	|   6.19  	|  119.14 	|  199.80 	|  360.79 	|
@@ -154,6 +157,7 @@ On top of that, the bottleneck was not due to the operation taking a long time t
 | Overall execution time (s)                      	|  13.08  	|  250.80 	|  401.84 	|  794.75 	|
 | Proportion of overall time in mat-vec calls (%) 	|   44.5  	|   47.5  	|   49.7  	|   45.4  	|
 | Proportion of overall time in mat-mat calls (%) 	|   14.0  	|   13.2  	|   13.0  	|   13.6  	|
+
 <center>Fig. 11. Execution times of mat-vec & mat-mat products over various grid sizes.</center>
 
 Even though these findings showed that it would be difficult to beat the current mat-dot implementation, there was one promising outcome: its execution time was growing quadratically. Even with a inherent parallelization starting cost, there was hope that at a certain threshold, we could get better execution time than numpy. By extrapolating the curve at Fig. 9, we estimated that a mat-vec product in a 1500x1500 grid would take around $11,018 \mu s$ per call. Obviously, extrapolation is not proof in any way, but it confirmed that improvement by parallelizing was not far fetched, especially for bigger grids.
@@ -183,6 +187,7 @@ On the other hand, having never used ctypes in the past, we could feel that it w
 |----------------|--------------------|
 | Subprocess     | 4705               |
 | Shared Library | 850                |
+
 <center> *Figure 12. Execution time of subprocess vs shared library* </center>
 
 Beyond simply being approximately 5-8x faster than a subprocess on average, we also noticed that shared library get a substantial speedup after the first call:
@@ -191,6 +196,7 @@ Beyond simply being approximately 5-8x faster than a subprocess on average, we a
 |--------|--------------------|
 | First Call  | 1270               |
 | Second Call | 72                 |
+
 <center> *Figure 13. Execution time of subsequent shared library calls* </center>
 
 We are not totally sure why that is the case, but we hypothesize that, just like serverless functions, there must be a big time difference between cold and warm starts. Overall, even though the extra programming complexity of using a shared library, the gain in performance could not be ignored, hence we decided to use ctypes for the go, gRPC, OMP, and hybrid implementations.
@@ -204,6 +210,7 @@ We quickly discovered that the matrices we were working with were extremely spar
 |--------|---------------------|
 | Matrix | 0.004                 |
 | Vector | 95                  |
+
 <center> *Figure 14. Approximate proportion of non-zero elements by structure in 250x250 grid* </center>
 
 This discovery makes sense with the given model as the matrices largely store information on the electric charge and the state of very narrow lightning leads over comparatively massive state spaces, these matrices also became more sparse as the size of the grid increased, further supporting this intuition. This meant that even though we had large matrices, we could encode them into much smaller arrays. There are many ways to encode compressed matrices: some common schemes are Compressed Sparse Row (CSR), Compressed Sparse Column (CSC), and COOrdinate list (COO). It turns out that for mat-vec products, the encoding used was always a matrix $A$ in CSR format and a vector $B$ as a simple numpy array --- as the latter is orders more dense. Choosing CSR makes sense for this dot product; recall that this operation multiplies and adds elements of row $i$ of the matrix with the vector, stores the result, then repeat with row $i+1$, and so on. The traversal of the elements of A follows a *row-major order* pattern (see Fig. 15), which is what CSR encodes into.
@@ -268,6 +275,7 @@ This optimization was not only theoretical, fortunately: it yielded a 30% speedu
 |-------|----------------|
 | Zeros | 13260          |
 | Empty | 9285           |
+
 <center> Fig. 17. Np.zeros vs np.empty execution times </center>
 
 
@@ -378,6 +386,7 @@ The difference in performance between python and lower-level implementations als
 |-------------------|----------------|
 |Numpy| 0.000551|
 |Non-Parallel C|0.002231|
+
 <center> Fig. 19. Dot-prodcut vector length </center>
 
 ## PyCuda
@@ -389,6 +398,7 @@ As mentioned before, the runtime of a dot product is fairly short (<10000$ \mu s
 | 64                | 401677         | 4463                  |
 | 150               | 425736        | 4730                 |
 | 300               | 3107930       | 34533                |
+
 <center> Fig. 20. PyCuda Transfer times </center>
 
 <img src="figures/transfer.png">
@@ -406,6 +416,7 @@ Similar to above, multi-node architectures had to be abandoned due to latency re
 |      | Time ($\mu s$) | % of Matrix-Vector Dot |
 |------|----------------|------------------------|
 | gRPC | 2184293        | 24,269                 |
+
 <center> Fig. 21. gRPC Dot product execution time </center>
 
 ## Memory Error
