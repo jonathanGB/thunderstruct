@@ -1,5 +1,11 @@
 # CS205-project
 
+**The whole report can be found [here](docs/index.md)**
+
+> Fractal growth is a computationally intensive simulation which has typically ignored traditionoal first principles in physics in order to increase speed. Lightning is a well understood phenomena that can be simulated accurately with the Dielectric Breakdown Model, but it is computationally expensive to do so. We seek to optimize this simulation with HPC through the parallelization of the simualtion at each time step using a multi-core and -node architecture on Google Cloud Engine. Using this approach, we obtained a non-trivial speedup and amanged to simulate lightning growth on a 1400x1400 grid.
+
+*The generated videos can be found in `output`. We recommend comparing the initial video [before our optimization](https://raw.githubusercontent.com/jonathanGB/CS205-project/master/output/100x100.mp4) using a 100x100 grid, to the [new one](output/1400x1400-300dpi-fastest.mp4) in a 1400x1400 grid.*
+
 ### PyCuda
 PyCuda implementation is on the `pycuda` branch.
 `git checkout pycuda`
