@@ -2,7 +2,7 @@
 
 This branch has both the OMP and Hybrid implementation of the parallelization. In order to run the OMP version you must install the following dependencies: 
 
--software­properties­common
+-software­properties­common\n
 -ppa:ubuntu­toolchain­r/test
 -gcc
 
