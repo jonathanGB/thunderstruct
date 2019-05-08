@@ -30,36 +30,36 @@ To simulate only the shape, one possible appraoch is diffusion limited aggregati
 4. With some probability $S$, the walker "sticks" to the charge. If it does not stick, it is allowed to continue to walk.
 5. The process is repeated until the given number of "steps" (walks) have occurred.
 
-Using the above method, one is able to accurately simulate the growth of fractal patterns and laplacian growth. The model is incredibly fast on small, two-dimension girds, as the computer must only randomly draw the direction of the random walk. This allows for rapid simulations compared to other methods, taking only (INSERT TIME).
+Using the above method, one is able to accurately simulate the growth of fractal patterns and laplacian growth. The model is incredibly fast on small, two-dimension girds, as the computer must only randomly draw the direction of the random walk. This allows for rapid simulations compared to other methods, taking only 120 seconds on a 256 x 256 grid.
 
 However, the model breaks down in two critical ways: it scales poorly and it does not accurately simulate the shape of lightning (see below image). Given the model is essentially a series of random walks, it takes far longer on larger grid sizes and even worse in high-dimension spaces. The root mean squared distance a random walk travels is actually the square root of the number of time steps in one dimension. 
-
-$$
-    RMSD = \sqrt{N}
-$$
 
 In two dimensions, the walk takes even longer given there are now two axes to walk along. In three, it is even more difficult for a random walk to "stick to" the initial charge as it has to probabalistically reach the single point in an ever-expanding space.
 
 The second criticism of the model can be remedied with tip-biasing, an approach developed to specifically model lightning's directionally-biased nature. In tip-biased DLA, the probability of the walker starting from a given point is inversely correlated with its distance from the tip of the stepped leader. It does not force the lightning in one direction, but allows it to grow in that direction with a greater probability. A normal distribution models the probability of starting from a point $n$ spaces from the tip, with the probability maximized at $n = k$. A sample distribution for k =  3 is shown below:
 
 | Distance    | 0 |  1 |  2 | 3 |  4 |  5 | 6 |
-|-------------|---|:--:|:--:|:-----:|:--:|:--:|---|
+|-------------|---|--|--|-----|--|--|---|
 | Probability | 0 | .1 | .2 |   .4  | .2 | .1 | 0 |
 
 This also helps remedy the scaling issue as the tip-bias dictates the random walk does not have to walk nearly as far. Thus,  the method helps to remedy the two aforementioned issues with DLA, but still does not take into account physical first-principles. 
 
 ![DLAtime](figures/DLAtime.png)
+
+
 The above figure is a comparison of runtimes for tip-biased DLA and normal DLA runtimes.
 
 
 ![DLAtipout](figures/DLAtipout.png)
+
+
 In the above image, the extreme branching pattern of tip-biased DLA can be seen, far less accurate than other methods in terms of shape, but still not as inaccurate as normal DLA.
 
 
 
 ## Dielectric Breakdown Model
 
-![DBMout](figures/DBM.png)
+![DBMout](figures/DMBout.png)
 
 The dielectric breakdown model is a method for simulating lightning with first-principles in mind. The algorthm can be summarized in the following steps:
 
@@ -70,17 +70,15 @@ The dielectric breakdown model is a method for simulating lightning with first-p
 
 Step two is the most computationally intensive. In order to calculate the potential grid from the initial point to the ground, we must solve  the Laplacian equation, derived from Maxwell's equations for an electric field:
 
-$$\nabla ^2 \phi = 0$$
+![maxwell](figures/image4.png)
 
 With two-dimensional finite-differences, we have:
 
-$$  \nabla ^2 \phi_{i,j} 
-    = \left(\frac{\partial^2}{\partial x^2}+\frac{\partial^2}{\partial y^2}\right)\phi_{i,j} \\
-   \nabla ^2 \phi_{i,j}  = \frac{\phi_{i,j+1}+\phi_{i+1,j}-4\phi_{i,j}+\phi_{i-1,j}+\phi_{i,j-1}}{h^2}$$
+![linear](figures/image3.png)
     
 From the above, we get . an equation for each point on the grid, meaning we get $n\times n$ linear equationos for an $n \times n$ grid. $phi$ is a dense vector of length $n$. This can be represented as the matrix product: 
 
-$$L_{n\times n}\cdot \phi = 0$$
+![linear](figures/image2.png)
 
 This system of linear equations is where we get the $O(N^2)$ complexity we see in the computational runtimes. With a grid of 128, we get $128 \times 128$ equations and thus have a $128^2 \times 128^2$ matrix. 
 
@@ -95,7 +93,7 @@ The intricacies of the above approach are not critical to understand in the cont
 
 The probability of a given point being the next point the stepped leader jumps to is directly proportional to its charge:
 
-$$ p_j = \frac{(\phi_j)^\eta}{\sum_{i \in I}(\phi_i)^\eta} $$
+![prob](figures/image1.png)
 
 $\eta$ is a branching hyperparameter. For the purposes of this report, it is not relevant but it essentially controls the probability of branching in the simulation.  A greater $\eta$ value dictates a straighter stepped leader. The value used in these simulations is 4. 
 
@@ -127,14 +125,20 @@ During the original implementation of DBM, the choice was made to use sparse mat
 
 ![numpy cpu usage](figures/numpy_cpu_1400x1400.png)
 <center> *Fig. X. CPU usage while running baseline algorithm on 96-core machine* </center>
+
+
 ![percent](figures/gridpercents.png)
+
+
 ![matvec](figures/matdot.png)
+
+
 ![matmat](figures/matmat.png)
 
 On top of that, the bottleneck was not due to the operation taking a long time to complete, but rather the sheer number of calls (see Table 1). On a 100x100 grid, the mat-vec dot product does take 6.19s, but it is called 88,200 times (for an average time of only $69\mu s$); on 250x250 grids, it is called 362,086 times; on 400x400 grids, over 400,000 times, averaging $811\mu s$. In terms of execution time per call, mat-mat products are indeed very slow, especially compared to mat-dot products. However, their relative importance in terms of total execution time is much less important than mat-dot products, due to the simple fact that it is called much less often. From initial profiling, it was clear that our focus had to be on mat-vec products, not on mat-mat products. The problem we faced with optimizing this operation by parallelizing it is its inherent initial cost; on such a short timescale to improve, serialization and communication overheads incurred, to name a few, can rapidly negate any benefits of parallelism.
 
 |                                                 	| 100x100 	| 250x250 	| 300x300 	| 400x400 	|
-|-------------------------------------------------	|:-------:	|:-------:	|:-------:	|:-------:	|
+|-------------------------------------------------	|-------	|-------	|-------	|-------	|
 | Total time in mat-vec products (s)              	|   6.19  	|  119.14 	|  199.80 	|  360.79 	|
 | Total time in mat-mat products (s)              	|   1.93  	|  33.05  	|  52.33  	|  108.52 	|
 | Number of mat-vec calls                         	|  88,200 	| 362,086 	| 439,218 	| 444,688 	|
@@ -147,8 +151,6 @@ On top of that, the bottleneck was not due to the operation taking a long time t
 <center>*Table 1. Execution times of mat-vec & mat-mat products over various grid sizes.*</center>
 
 Even though these findings showed that it would be difficult to beat the current mat-dot implementation, there was one promising outcome: its execution time was growing quadratically. Even with a inherent parallelization starting cost, there was hope that at a certain threshold, we could get better execution time than numpy. By extrapolating the curve at Fig. X, we estimated that a mat-vec product in a 1500x1500 grid would take around $11,018 \mu s$ per call. Obviously, extrapolation is not proof in any way, but it confirmed that improvement by parallelizing was not far fetched, especially for bigger grids.
-
-<center> ![mat-dot](figures/matdot.png =600x400) </center>
 
 # Implementations
 
@@ -172,7 +174,7 @@ output = run("./hello", stdout=PIPE)
 On the other hand, having never used ctypes in the past, we could feel that it would be a daunting task. Indeed, passing non-scalar data like arrays is a non-trivial task. Passing a dynamic array requires allocating to the heap, but freeing it afterwards requires some thought. Ease of use is great, but we had a tight time budget: were subprocesses spawned as fast as calling a shared library? As shown in Table 2, that was not the case; we ran a simple *hello world* program using both techniques, and shared libraries were consistently much faster than subprocesses. Note that the execution time varied a lot across different runs, but the difference scale was always substantial; this variance could notably be explained by OS scheduling decisions (putting the process on hold for instance).
 
 |                | Execution Time ($\mu s$ )|
-|----------------|:--------------------:|
+|----------------|--------------------|
 | Subprocess     | 4705               |
 | Shared Library | 850                |
 <center> *Table 2. Execution time of subprocess vs shared library* </center>
@@ -370,9 +372,7 @@ The difference in performance between python and lower-level implementations als
 
 ## PyCuda
 
-As mentioned before, the runtime of a dot product is fairly short (<10000$ \mu s$ on a 1500 x 1500 grid). Thus, any attempt to parallelize will have to ensure that the communication overhead is not too significant. However, when PyCuda is invoked, it must copy over the data from the main memory to the GPU memory before the operation can be executed. We knew from experience that sending data via the PCIe bus to the GPU was going to be a serious bottleneck. In order to valide our conjecture, the transfer times of various grid sizes were tested on an AWS g3 instance (see appendix for specifications). These results are tabulated below for a .004% non-zero elements matrix:
-
-<todo: talk about the amount of data, pcie bandwidth, so on>
+As mentioned before, the runtime of a dot product is fairly short (<10000$ \mu s$ on a 1500 x 1500 grid). Thus, any attempt to parallelize will have to ensure that the communication overhead is not too significant. However, when PyCuda is invoked, it must copy over the data from the main memory to the GPU memory before the operation can be executed. We knew from experience that sending data via the PCIe bus to the GPU was going to be a serious bottleneck. Given the In order to valide our conjecture, the transfer times of various grid sizes were tested on an AWS g3 instance (see PyCuda branch for specifications). These results are tabulated below for a .004% non-zero elements matrix:
 
 | Grid Size (n x n) | Time ($\mu s$) | % of Matrix-Vector Dot |
 |-------------------|----------------|------------------------|
@@ -389,7 +389,7 @@ As can be seen above, the transfer time far outweighs the time of an operation, 
 
 ## Latency
 
-Similar to above, multi-node architectures had to be abandoned due to latency resulting in too great of an overhead. Using a cluster of 8 c5 worker instances and one t2 master instance (see appendix), gRPC was tested but quickly abandoned. With a latency of about 3000 $\mu s$ on a 1080x1080 grid, the latency was significant. Further testing revealed that the average matrix-vector dot product on a 1500x1500 grid was 2184293 $\mu s$:
+Similar to above, multi-node architectures had to be abandoned due to latency resulting in too great of an overhead. Using a cluster of 8 c5 worker instances and one t2 master instance (see gRPC-buffer branch for specifications), gRPC was tested but quickly abandoned. With a latency of about 3000 $\mu s$ on a 1080x1080 grid, the latency was significant. Further testing revealed that the average matrix-vector dot product on a 1500x1500 grid was 2184293 $\mu s$:
 
 |      | Time ($\mu s$) | % of Matrix-Vector Dot |
 |------|----------------|------------------------|
@@ -397,7 +397,7 @@ Similar to above, multi-node architectures had to be abandoned due to latency re
 
 ## Memory Error
 
-After approximately 13 hours of real time and approxiamtely 375 hours of compute time on a GCE instance (see appendix), the run failed to generate a 1600x1600 simulation over 6,000 time steps because a **MemoryError** was thrown. In order to generate the movie, the array of grids is copied for rendering. This means that what was a 3D array of around 130GB essentially doubles, resulting in far more memory being used than we expected. We had 300GB of RAM at the time, which should have been enough to handle this increase. However, we believe that some other memory from the generation part of the algorithm (before rendering) had not been freed yet. Python being a garbage-collected language, it is much more difficult to free memory. At this point in the process the leaking memory should have been freed (as it was out of the lexical scope), but it seems like it was not yet. As such, we increased the memory to a 600GB total. This was definitely overboard --- the subsequent run showed that the peak reached was near 330GB ---, but the little difference in terms of cost made it feel like a safe bet. If we were to run this again, we could request less memory, as we would be more confident of its reasonable range of usage.
+After approximately 13 hours of real time and approxiamtely 375 hours of compute time on a GCE instance (see gRPC-buffer branch for specifications), the run failed to generate a 1600x1600 simulation over 6,000 time steps because a **MemoryError** was thrown. In order to generate the movie, the array of grids is copied for rendering. This means that what was a 3D array of around 130GB essentially doubles, resulting in far more memory being used than we expected. We had 300GB of RAM at the time, which should have been enough to handle this increase. However, we believe that some other memory from the generation part of the algorithm (before rendering) had not been freed yet. Python being a garbage-collected language, it is much more difficult to free memory. At this point in the process the leaking memory should have been freed (as it was out of the lexical scope), but it seems like it was not yet. As such, we increased the memory to a 600GB total. This was definitely overboard --- the subsequent run showed that the peak reached was near 330GB ---, but the little difference in terms of cost made it feel like a safe bet. If we were to run this again, we could request less memory, as we would be more confident of its reasonable range of usage.
 
 In order to prevent the need to rerun in the event of a failed render, we also wrote the array to disk before rendering. By default on GCP, compute engines are assigned 10GB of disk storage (can be HDD or SSD, for an extra cost); to satisfy the need to store 130GB to disk, we had to request the corresponding amount of non-volatile storage. To be further certain not to miss storage this time --- as we were not sure how efficient the encoding to disk would be --- we in fact requested 200GB.
 
